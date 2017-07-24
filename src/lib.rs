@@ -6,6 +6,7 @@
 extern crate capnp;
 extern crate capnp_futures;
 extern crate futures;
+extern crate futures_cpupool;
 extern crate mio_uds;
 extern crate tokio_core;
 extern crate tokio_io;

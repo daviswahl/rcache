@@ -1,10 +1,3 @@
-extern crate futures;
-extern crate tokio_io;
-extern crate tokio_core;
-extern crate tokio_proto;
-extern crate tokio_service;
-extern crate bytes;
-
 use futures::{future, Future, Stream, Sink, IntoFuture};
 
 use tokio_core::reactor::Core;
@@ -20,6 +13,8 @@ use std::net::SocketAddr;
 use message::Message;
 use cache::Cache;
 use codec::CacheCodec;
+use futures_cpupool::CpuPool;
+
 
 /// `serve`
 pub fn serve<T>(addr: SocketAddr, s: T) -> io::Result<()>
@@ -61,7 +56,7 @@ impl Service for CacheService {
     type Future = Box<Future<Item = Message, Error = io::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
-        future::ok(self.cache.process(req)).boxed()
+        Box::new(future::ok(self.cache.process(req)))
     }
 }
 
@@ -73,7 +68,7 @@ impl NewService for CacheService {
     type Instance = CacheService;
 
     fn new_service(&self) -> io::Result<Self::Instance> {
-        Ok(CacheService { cache: Cache {} })
+        Ok(CacheService { cache: Cache {}})
     }
 }
 

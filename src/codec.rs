@@ -1,5 +1,5 @@
 use tokio_io::codec::{Encoder, Decoder};
-use tokio_proto::streaming::multiplex::RequestId;
+use tokio_proto::multiplex::RequestId;
 use std::io;
 use std::convert::TryFrom;
 use bytes::{Buf, BufMut, BigEndian, BytesMut};
