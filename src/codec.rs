@@ -4,7 +4,7 @@ use tokio_proto::multiplex::{RequestId, ClientProto, ServerProto};
 use std::io;
 use std::convert::TryFrom;
 use bytes::{Buf, BufMut, BigEndian, BytesMut};
-use message::{Message, Payload, Op};
+use message::{Message, MessageBuilder, Op};
 
 static HEADER_LEN: usize = 25;
 /// +-- request id ------+---- op --------+---type id -----+--- payload len ---+---- key len ---
@@ -50,17 +50,15 @@ impl Decoder for CacheCodec {
         let key = &message[HEADER_LEN..HEADER_LEN + key_len];
         let data = &message[HEADER_LEN + key_len..HEADER_LEN + key_len + payload_len];
 
-        Ok(Some((
-            request_id as RequestId,
-            Message {
-                op: Op::try_from(op)?,
-                key: key.to_owned(),
-                payload: Payload {
-                    type_id: type_id,
-                    data: data.to_owned(),
-                },
-            },
-        )))
+        let mut msg = MessageBuilder::new();
+        {
+            msg.set_op(Op::try_from(op)?)
+            .set_key(key.to_owned())
+            .set_type_id(type_id)
+            .set_payload(data.to_owned());
+        }
+
+        Ok(Some((request_id as RequestId, msg.into_message()?)))
     }
 }
 
@@ -70,42 +68,16 @@ impl Encoder for CacheCodec {
 
     fn encode(&mut self, msg: (RequestId, Message), buf: &mut BytesMut) -> io::Result<()> {
         let (request_id, msg) = msg;
-        let min_size = 8 + 1 + 4 + 8 + 4 + msg.key.len() + msg.payload.data.len();
+        let min_size = 8 + 1 + 4 + 8 + 4 + msg.key().len() + msg.payload().len();
         buf.reserve(min_size);
         buf.put_u64::<BigEndian>(request_id as u64);
-        buf.put_u8(msg.op as u8);
-        buf.put_u32::<BigEndian>(msg.payload.type_id as u32);
-        buf.put_u64::<BigEndian>(msg.payload.data.len() as u64);
-        buf.put_u32::<BigEndian>(msg.key.len() as u32);
-        buf.put_slice(msg.key.as_ref());
-        buf.put_slice(msg.payload.data.as_ref());
+        buf.put_u8(msg.op() as u8);
+        buf.put_u32::<BigEndian>(msg.type_id() as u32);
+        buf.put_u64::<BigEndian>(msg.payload().len() as u64);
+        buf.put_u32::<BigEndian>(msg.key().len() as u32);
+        buf.put_slice(msg.key());
+        buf.put_slice(msg.payload());
         Ok(())
-    }
-}
-
-/// `CacheProto`
-pub struct CacheProto;
-impl<T: AsyncRead + AsyncWrite + 'static> ClientProto<T> for CacheProto {
-    type Request = Message;
-    type Response = Message;
-
-    type Transport = Framed<T, CacheCodec>;
-    type BindTransport = Result<Self::Transport, io::Error>;
-
-    fn bind_transport(&self, io: T) -> Self::BindTransport {
-        Ok(io.framed(CacheCodec))
-    }
-}
-
-impl<T: AsyncRead + AsyncWrite + 'static> ServerProto<T> for CacheProto {
-    type Request = Message;
-    type Response = Message;
-
-    type Transport = Framed<T, CacheCodec>;
-    type BindTransport = Result<Self::Transport, io::Error>;
-
-    fn bind_transport(&self, io: T) -> Self::BindTransport {
-        Ok(io.framed(CacheCodec))
     }
 }
 
@@ -127,14 +99,9 @@ mod tests {
     }
     #[test]
     fn test() {
-        let msg = Message {
-            op: Op::Get,
-            key: "foo".into(),
-            payload: Payload {
-                type_id: 2,
-                data: "asdfoiuasdf".to_owned().into_bytes(),
-            },
-        };
+        let msg = MessageBuilder::new()
+            .set_op(Op::Get).set_key("foo".into()).set_type_id(3).set_payload("123091823".into())
+            .finish().unwrap();
 
 
         println!("message: {:?}", msg);

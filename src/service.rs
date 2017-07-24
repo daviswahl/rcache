@@ -14,6 +14,7 @@ use std::{io, str};
 use std::net::SocketAddr;
 
 use codec;
+use proto::CacheProto;
 use message::Message;
 
 /// `serve`
@@ -21,7 +22,7 @@ pub fn serve<T>(addr: SocketAddr, new_service: T)
 where
     T: NewService<Request = Message, Response = Message, Error = io::Error> + Send + Sync + 'static,
 {
-    TcpServer::new(codec::CacheProto, addr).serve(new_service)
+    TcpServer::new(CacheProto, addr).serve(new_service)
 }
 
 /// `CacheService`
@@ -64,9 +65,9 @@ impl<T> Service for LogService<T>
     type Future = Box<Future<Item = Message, Error = io::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
-        println!("Got Request! Op: {:?}, Key: {:?}", req.op, req.key.to_owned());
+        println!("Got Request! {:?}", req);
         Box::new(self.inner.call(req).and_then(|resp| {
-            println!("Got Response! Payload: {:?}", resp.payload.data.to_owned());
+            println!("Got Response: {:?}", resp);
             Ok(resp)
         }))
     }

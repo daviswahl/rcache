@@ -8,13 +8,13 @@ use tokio_service::Service;
 use std::net::SocketAddr;
 use std::io;
 
-use codec;
+use proto::CacheProto;
 use service;
 use message::Message;
 
 /// `Client`
 pub struct Client {
-    inner: service::LogService<ClientService<TcpStream, codec::CacheProto>>,
+    inner: service::LogService<ClientService<TcpStream, CacheProto>>,
 }
 
 impl Client {
@@ -22,7 +22,7 @@ impl Client {
         addr: &SocketAddr,
         handle: &Handle,
     ) -> impl Future<Item = Client, Error = io::Error> {
-        TcpClient::new(codec::CacheProto)
+        TcpClient::new(CacheProto)
             .connect(addr, handle)
             .map(|client_service| {
                 Client { inner: service::LogService { inner: client_service } }

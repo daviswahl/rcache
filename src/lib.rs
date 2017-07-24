@@ -18,7 +18,4 @@ pub mod codec;
 pub mod client;
 pub mod service;
 pub mod message;
-
-pub mod cache_capnp {
-    include!(concat!(env!("OUT_DIR"), "/schema/cache_capnp.rs"));
-}
+pub mod proto;
