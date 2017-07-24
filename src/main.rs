@@ -23,13 +23,11 @@ fn main() {
         match arg.as_str() {
             "server" => do_server(),
             "client" => {
-                let mut i  = 0;
+                let mut i = 0;
                 let mut children = vec![];
                 loop {
-                    children.push(thread::spawn(move|| {
-                        do_client(i);
-                    }));
-                    i = i+1;
+                    children.push(thread::spawn(move || { do_client(i); }));
+                    i = i + 1;
 
                     if children.len() > 20 {
                         children.pop().unwrap().join();
@@ -45,7 +43,7 @@ fn main() {
 fn do_server() {
     service::serve("127.0.0.1:12345".parse().unwrap(), || {
         Ok(service::LogService {
-            inner: service::CacheService { cache: Arc::new(cache::Cache {}) },
+            inner: service::CacheService { cache: cache::Cache::new().unwrap() },
         })
     }).unwrap();
 }

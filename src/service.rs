@@ -47,7 +47,7 @@ where
 
 /// `CacheService`
 pub struct CacheService {
-    pub cache: Arc<cache::Cache>,
+    pub cache: cache::Cache,
 }
 
 impl Service for CacheService {
@@ -57,13 +57,7 @@ impl Service for CacheService {
     type Future = Box<Future<Item = Message, Error = io::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
-        let (tx, rx) = oneshot::channel();
-
-        let cache = self.cache.clone();
-        thread::spawn(move || tx.complete(cache.process(req)));
-        rx.map(|msg| msg.unwrap())
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "something's up"))
-            .boxed()
+        self.cache.process(req)
     }
 }
 
@@ -74,7 +68,7 @@ impl NewService for CacheService {
     type Instance = CacheService;
 
     fn new_service(&self) -> io::Result<Self::Instance> {
-        Ok(CacheService { cache: Arc::new(cache::Cache {}) })
+        Ok(CacheService { cache: cache::Cache::new()? })
     }
 }
 
@@ -92,9 +86,9 @@ impl<T> Service for LogService<T>
     type Future = Box<Future<Item = Message, Error = io::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
-        //println!("Got Request! {:?}", req);
+        println!("Got Request! {:?}", req);
         Box::new(self.inner.call(req).and_then(|resp| {
-         //   println!("Got Response: {:?}", resp);
+            println!("Got Response: {:?}", resp);
             Ok(resp)
         }))
     }
