@@ -38,12 +38,7 @@ pub struct MessageBuilder {
 
 impl MessageBuilder {
     pub fn new() -> Self {
-        MessageBuilder {
-            op: None,
-            key: None,
-            payload: None,
-            type_id: None,
-        }
+        Self::default()
     }
 
     pub fn set_op(&mut self, op: Op) -> &mut Self {

@@ -35,14 +35,22 @@ fn do_client() {
 
     core.run(client.and_then(|client| {
         let mut message_builder = MessageBuilder::new();
-        { message_builder
-            .set_op(Op::Set)
-            .set_type_id(3)
-            .set_key("foo".to_owned().into_bytes())
-            .set_payload("bar".to_owned().into_bytes());
+        {
+            message_builder
+                .set_op(Op::Set)
+                .set_type_id(3)
+                .set_key("foo".to_owned().into_bytes())
+                .set_payload("bar".to_owned().into_bytes());
         }
 
-        let futs = (0..10).map(move |i| client.call(message_builder.set_key(i.to_string().into_bytes()).finish().unwrap()));
+        let futs = (0..10).map(move |i| {
+            client.call(
+                message_builder
+                    .set_key(i.to_string().into_bytes())
+                    .finish()
+                    .unwrap(),
+            )
+        });
         futures::future::join_all(futs)
     })).unwrap();
 }

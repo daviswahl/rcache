@@ -52,9 +52,9 @@ impl Decoder for CacheCodec {
         let mut msg = MessageBuilder::new();
         {
             msg.set_op(Op::try_from(op)?)
-            .set_key(key.to_owned())
-            .set_type_id(type_id)
-            .set_payload(data.to_owned());
+                .set_key(key.to_owned())
+                .set_type_id(type_id)
+                .set_payload(data.to_owned());
         }
 
         Ok(Some((request_id as RequestId, msg.into_message()?)))
@@ -99,8 +99,12 @@ mod tests {
     #[test]
     fn test() {
         let msg = MessageBuilder::new()
-            .set_op(Op::Get).set_key("foo".into()).set_type_id(3).set_payload("123091823".into())
-            .finish().unwrap();
+            .set_op(Op::Get)
+            .set_key("foo".into())
+            .set_type_id(3)
+            .set_payload("123091823".into())
+            .finish()
+            .unwrap();
 
 
         println!("message: {:?}", msg);
