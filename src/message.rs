@@ -28,7 +28,7 @@ impl Message {
 }
 
 /// `MessageBuilder`
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Default)]
 pub struct MessageBuilder {
     op: Option<Op>,
     key: Option<Vec<u8>>,
@@ -67,19 +67,19 @@ impl MessageBuilder {
     }
 
     pub fn into_message(self) -> Result<Message, io::Error> {
-        let op = self.op.ok_or(io::Error::new(
+        let op = self.op.ok_or_else(|| io::Error::new(
             io::ErrorKind::InvalidData,
             "no op set",
         ))?;
-        let payload = self.payload.ok_or(io::Error::new(
+        let payload = self.payload.ok_or_else(|| io::Error::new(
             io::ErrorKind::InvalidData,
             "no payload set",
         ))?;
-        let key = self.key.ok_or(io::Error::new(
+        let key = self.key.ok_or_else(|| io::Error::new(
             io::ErrorKind::InvalidData,
             "no key set",
         ))?;
-        let type_id = self.type_id.ok_or(io::Error::new(
+        let type_id = self.type_id.ok_or_else(|| io::Error::new(
             io::ErrorKind::InvalidData,
             "no type_id set",
         ))?;
@@ -95,19 +95,19 @@ impl MessageBuilder {
     }
 
     pub fn finish(&self) -> Result<Message, io::Error> {
-        let op = self.op.ok_or(io::Error::new(
+        let op = self.op.ok_or_else(|| io::Error::new(
             io::ErrorKind::InvalidData,
             "no op set",
         ))?;
-        let payload = self.payload.clone().ok_or(io::Error::new(
+        let payload = self.payload.clone().ok_or_else(|| io::Error::new(
             io::ErrorKind::InvalidData,
             "no payload set",
         ))?;
-        let key = self.key.clone().ok_or(io::Error::new(
+        let key = self.key.clone().ok_or_else(|| io::Error::new(
             io::ErrorKind::InvalidData,
             "no key set",
         ))?;
-        let type_id = self.type_id.ok_or(io::Error::new(
+        let type_id = self.type_id.ok_or_else(|| io::Error::new(
             io::ErrorKind::InvalidData,
             "no type_id set",
         ))?;

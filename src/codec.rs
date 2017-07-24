@@ -1,6 +1,5 @@
-use tokio_io::codec::{Encoder, Decoder, Framed};
-use tokio_io::{AsyncRead, AsyncWrite};
-use tokio_proto::multiplex::{RequestId, ClientProto, ServerProto};
+use tokio_io::codec::{Encoder, Decoder};
+use tokio_proto::multiplex::RequestId;
 use std::io;
 use std::convert::TryFrom;
 use bytes::{Buf, BufMut, BigEndian, BytesMut};

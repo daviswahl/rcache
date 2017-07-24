@@ -13,7 +13,6 @@ use tokio_service::{Service, NewService};
 use std::{io, str};
 use std::net::SocketAddr;
 
-use codec;
 use proto::CacheProto;
 use message::Message;
 
