@@ -14,6 +14,7 @@ extern crate tokio_proto;
 extern crate tokio_service;
 extern crate deque;
 extern crate bytes;
+extern crate rand;
 
 pub mod codec;
 pub mod client;

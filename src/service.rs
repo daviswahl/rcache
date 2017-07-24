@@ -1,4 +1,4 @@
-use futures::{future, Future, Stream, Sink, IntoFuture};
+use futures::{stream, future, Future, Stream, Sink, IntoFuture};
 
 use tokio_core::reactor::Core;
 use tokio_core::net::TcpListener;
@@ -11,10 +11,12 @@ use std::{io, str};
 use std::net::SocketAddr;
 
 use message::Message;
-use cache::Cache;
+use cache;
 use codec::CacheCodec;
 use futures_cpupool::CpuPool;
-
+use std::thread;
+use std::sync::Arc;
+use futures::sync::oneshot;
 
 /// `serve`
 pub fn serve<T>(addr: SocketAddr, s: T) -> io::Result<()>
@@ -32,12 +34,11 @@ where
         let service = s.new_service().unwrap();
 
         let responses = reader.and_then(move |(req_id, msg)| {
-            service.call(msg).map(move|resp| (req_id, resp))
+            service.call(msg).map(move |resp| (req_id, resp))
         });
 
         let server = writer.send_all(responses).then(|_| Ok(()));
         handle.spawn(server);
-
         Ok(())
     });
 
@@ -46,7 +47,7 @@ where
 
 /// `CacheService`
 pub struct CacheService {
-    pub cache: Cache,
+    pub cache: Arc<cache::Cache>,
 }
 
 impl Service for CacheService {
@@ -56,10 +57,15 @@ impl Service for CacheService {
     type Future = Box<Future<Item = Message, Error = io::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
-        Box::new(future::ok(self.cache.process(req)))
+        let (tx, rx) = oneshot::channel();
+
+        let cache = self.cache.clone();
+        thread::spawn(move || tx.complete(cache.process(req)));
+        rx.map(|msg| msg.unwrap())
+            .map_err(|_| io::Error::new(io::ErrorKind::Other, "something's up"))
+            .boxed()
     }
 }
-
 
 impl NewService for CacheService {
     type Request = Message;
@@ -68,7 +74,7 @@ impl NewService for CacheService {
     type Instance = CacheService;
 
     fn new_service(&self) -> io::Result<Self::Instance> {
-        Ok(CacheService { cache: Cache {}})
+        Ok(CacheService { cache: Arc::new(cache::Cache {}) })
     }
 }
 
@@ -86,9 +92,9 @@ impl<T> Service for LogService<T>
     type Future = Box<Future<Item = Message, Error = io::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
-        println!("Got Request! {:?}", req);
+        //println!("Got Request! {:?}", req);
         Box::new(self.inner.call(req).and_then(|resp| {
-            println!("Got Response: {:?}", resp);
+         //   println!("Got Response: {:?}", resp);
             Ok(resp)
         }))
     }
