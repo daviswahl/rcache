@@ -48,13 +48,13 @@ pub struct Header {
     key_len: u32,
 }
 
-/// +-- request id ------+---- op --------+---type id -----+--- payload len ---+   keylen ----
-/// |                    |                |                |                   |  4 bytes u32
-/// | 8 bytes u64        |  1 byte        |   4 bytes u32  |   8 bytes u64     |
+/// +-- request id ------+---- op --------+---type id -----+--- payload len ---+---- key len ---
+/// |                    |                |                |                   |
+/// | u64 (8 bytes)      |  u8 1 byte     | u32 (4 bytes)  |   u64 (8 bytes)   |  u32 (4 bytes)
 ///
 /// +--- key --+-- payload --+
-/// | u8 bytes |             |
-/// |          |   u8 bytes  |
+/// |          |             |
+/// |   [u8]   |   [u8]      |
 ///
 impl Decoder for CacheCodec {
     type Item = (RequestId, Message);
