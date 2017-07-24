@@ -1,5 +1,5 @@
 [package]
-name = "objcache"
+name = "rcache"
 version = "0.1.0"
 authors = ["Davis Wahl <dwahl@signalpath.com>"]
 
@@ -9,7 +9,7 @@ build = "build.rs"
 path = "src/lib.rs"
 
 [[bin]]
-name = "objcache"
+name = "rcache"
 path = "src/main.rs"
 
 [dependencies]

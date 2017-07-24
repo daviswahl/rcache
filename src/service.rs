@@ -7,82 +7,87 @@ extern crate bytes;
 
 use futures::{future, Future};
 
-use tokio_proto::{TcpServer};
+use tokio_proto::TcpServer;
 use tokio_service::{Service, NewService};
 
 use std::{io, str};
 use std::net::SocketAddr;
 
 use codec;
+use message::Message;
+
+/// `serve`
 pub fn serve<T>(addr: SocketAddr, new_service: T)
 where
-    T: NewService<Request = codec::Message, Response = codec::Message, Error = io::Error>
-        + Send
-        + Sync
-        + 'static,
+    T: NewService<Request = Message, Response = Message, Error = io::Error> + Send + Sync + 'static,
 {
     TcpServer::new(codec::CacheProto, addr).serve(new_service)
 }
 
-pub struct LogService<T> {
-    pub inner: T
-}
-
-impl<T> Service for LogService<T> where T: Service<Request = codec::Message, Response = codec::Message, Error = io::Error>, T::Future: 'static {
-    type Request = codec::Message;
-    type Response = codec::Message;
-    type Error = io::Error;
-    type Future = Box<Future<Item = codec::Message, Error = io::Error>>;
-
-    fn call(&self, req: Self::Request) -> Self::Future {
-        println!("Got Request! Op: {:?}, Key: {:?}", req.op, String::from_utf8(req.key.clone()).unwrap());
-        Box::new(self.inner.call(req).and_then(|resp| {
-            {
-                println!("Got Response! Payload: {:?}", String::from_utf8(resp.payload.data.clone()).unwrap());
-            }
-            Ok(resp)
-        }))
-    }
-}
-
+/// `CacheService`
 pub struct CacheService;
 
-impl Service for CacheService
-{
-    type Request = codec::Message;
-    type Response = codec::Message;
+impl Service for CacheService {
+    type Request = Message;
+    type Response = Message;
     type Error = io::Error;
-    type Future = Box<Future<Item = codec::Message, Error = io::Error>>;
+    type Future = Box<Future<Item = Message, Error = io::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
         Box::new(future::ok(req))
     }
 }
 
-impl<T> NewService for LogService<T>
-where T: NewService<Request = codec::Message, Response = codec::Message, Error = io::Error>,
-      <T::Instance as Service>::Future: 'static
-{
 
-    type Request = codec::Message;
-    type Response = codec::Message;
+impl NewService for CacheService {
+    type Request = Message;
+    type Response = Message;
+    type Error = io::Error;
+    type Instance = CacheService;
+
+    fn new_service(&self) -> io::Result<Self::Instance> {
+        Ok(CacheService)
+    }
+}
+
+/// `LogService`
+pub struct LogService<T> {
+    pub inner: T,
+}
+
+impl<T> Service for LogService<T>
+    where T: Service<Request = Message, Response = Message, Error = io::Error>,
+          T::Future: 'static {
+    type Request = Message;
+    type Response = Message;
+    type Error = io::Error;
+    type Future = Box<Future<Item = Message, Error = io::Error>>;
+
+    fn call(&self, req: Self::Request) -> Self::Future {
+        println!("Got Request! Op: {:?}, Key: {:?}", req.op, req.key.to_owned());
+        Box::new(self.inner.call(req).and_then(|resp| {
+            println!("Got Response! Payload: {:?}", resp.payload.data.to_owned());
+            Ok(resp)
+        }))
+    }
+}
+
+impl<T> NewService for LogService<T>
+where
+    T: NewService<
+        Request = Message,
+        Response = Message,
+        Error = io::Error,
+    >,
+    <T::Instance as Service>::Future: 'static,
+{
+    type Request = Message;
+    type Response = Message;
     type Error = io::Error;
     type Instance = LogService<T::Instance>;
 
     fn new_service(&self) -> io::Result<Self::Instance> {
         let inner = self.inner.new_service()?;
         Ok(LogService { inner: inner })
-    }
-}
-
-impl NewService for CacheService
-{
-    type Request = codec::Message;
-    type Response = codec::Message;
-    type Error = io::Error;
-    type Instance = CacheService;
-
-    fn new_service(&self) -> io::Result<Self::Instance> {
-        Ok(CacheService)
     }
 }

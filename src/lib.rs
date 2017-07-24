@@ -1,4 +1,5 @@
 #![feature(conservative_impl_trait)]
+#![feature(try_from)]
 #![feature(plugin)]
 #![plugin(clippy)]
 
@@ -16,7 +17,8 @@ extern crate bytes;
 pub mod codec;
 pub mod client;
 pub mod service;
+pub mod message;
+
 pub mod cache_capnp {
     include!(concat!(env!("OUT_DIR"), "/schema/cache_capnp.rs"));
 }
-
