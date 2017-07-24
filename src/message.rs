@@ -5,25 +5,25 @@ use std::io;
 #[derive(Debug, PartialEq, Clone)]
 pub struct Message {
     op: Op,
-    key: Vec<u8>,
-    payload: Payload,
+    key: Option<Vec<u8>>,
+    payload: Option<Payload>,
 }
 
 impl Message {
-    pub fn key(&self) -> &[u8] {
-        self.key.as_ref()
+    pub fn key(&self) -> Option<&[u8]> {
+        self.key.as_ref().map(|m| m.as_ref())
     }
 
     pub fn op(&self) -> Op {
         self.op
     }
 
-    pub fn type_id(&self) -> u32 {
-        self.payload.type_id
+    pub fn type_id(&self) -> Option<u32> {
+        self.payload.as_ref().map(|p| p.type_id)
     }
 
-    pub fn payload(&self) -> &[u8] {
-        self.payload.data.as_ref()
+    pub fn payload(&self) -> Option<&[u8]> {
+        self.payload.as_ref().map(|p| p.data.as_ref())
     }
 }
 
@@ -47,12 +47,20 @@ impl MessageBuilder {
     }
 
     pub fn set_key(&mut self, key: Vec<u8>) -> &mut Self {
-        self.key = Some(key);
+        if !key.is_empty() {
+            self.key = Some(key);
+        } else {
+            self.key = None;
+        }
         self
     }
 
     pub fn set_payload(&mut self, payload: Vec<u8>) -> &mut Self {
-        self.payload = Some(payload);
+        if payload.is_empty() {
+            self.payload = None;
+        } else {
+            self.payload = Some(payload);
+        }
         self
     }
 
@@ -66,54 +74,50 @@ impl MessageBuilder {
             io::ErrorKind::InvalidData,
             "no op set",
         ))?;
-        let payload = self.payload.ok_or_else(|| io::Error::new(
-            io::ErrorKind::InvalidData,
-            "no payload set",
-        ))?;
-        let key = self.key.ok_or_else(|| io::Error::new(
-            io::ErrorKind::InvalidData,
-            "no key set",
-        ))?;
-        let type_id = self.type_id.ok_or_else(|| io::Error::new(
-            io::ErrorKind::InvalidData,
-            "no type_id set",
-        ))?;
+
+        let key = self.key;
+
+        let type_id = if self.payload.is_some() {
+            self.type_id.ok_or_else(|| io::Error::new(
+                io::ErrorKind::InvalidData,
+                "no type_id set",
+            ))?
+        } else { 0 };
+
+        let payload = self.payload.map(|payload| {
+            Payload { data: payload, type_id: type_id }
+        });
 
         Ok(Message {
             op: op,
             key: key,
-            payload: Payload {
-                type_id: type_id,
-                data: payload,
-            },
+            payload: payload
         })
     }
 
     pub fn finish(&self) -> Result<Message, io::Error> {
+        let key = self.key.clone();
+
         let op = self.op.ok_or_else(|| io::Error::new(
             io::ErrorKind::InvalidData,
             "no op set",
         ))?;
-        let payload = self.payload.clone().ok_or_else(|| io::Error::new(
-            io::ErrorKind::InvalidData,
-            "no payload set",
-        ))?;
-        let key = self.key.clone().ok_or_else(|| io::Error::new(
-            io::ErrorKind::InvalidData,
-            "no key set",
-        ))?;
-        let type_id = self.type_id.ok_or_else(|| io::Error::new(
-            io::ErrorKind::InvalidData,
-            "no type_id set",
-        ))?;
+
+        let type_id = if self.payload.is_some() {
+            self.type_id.ok_or_else(|| io::Error::new(
+                io::ErrorKind::InvalidData,
+                "no type_id set",
+            ))?
+        } else { 0 };
+
+        let payload = self.payload.as_ref().map(|payload| {
+            Payload { data: payload.clone(), type_id: type_id }
+        });
 
         Ok(Message {
             op: op,
             key: key,
-            payload: Payload {
-                type_id: type_id,
-                data: payload,
-            },
+            payload: payload
         })
     }
 }

@@ -1,5 +1,5 @@
 use tokio_io::codec::{Encoder, Decoder};
-use tokio_proto::multiplex::RequestId;
+use tokio_proto::streaming::multiplex::RequestId;
 use std::io;
 use std::convert::TryFrom;
 use bytes::{Buf, BufMut, BigEndian, BytesMut};
@@ -67,15 +67,22 @@ impl Encoder for CacheCodec {
 
     fn encode(&mut self, msg: (RequestId, Message), buf: &mut BytesMut) -> io::Result<()> {
         let (request_id, msg) = msg;
-        let min_size = 8 + 1 + 4 + 8 + 4 + msg.key().len() + msg.payload().len();
+
+        let key = msg.key().unwrap_or_else(|| &[]);
+        let payload = msg.payload().unwrap_or_else(|| &[]);
+        // TODO: return Err if payload is given but no type id
+        let type_id = msg.type_id().unwrap_or(0 as u32);
+
+        let min_size = 8 + 1 + 4 + 8 + 4 + key.len() + payload.len();
+
         buf.reserve(min_size);
         buf.put_u64::<BigEndian>(request_id as u64);
         buf.put_u8(msg.op() as u8);
-        buf.put_u32::<BigEndian>(msg.type_id() as u32);
-        buf.put_u64::<BigEndian>(msg.payload().len() as u64);
-        buf.put_u32::<BigEndian>(msg.key().len() as u32);
-        buf.put_slice(msg.key());
-        buf.put_slice(msg.payload());
+        buf.put_u32::<BigEndian>(type_id);
+        buf.put_u64::<BigEndian>(payload.len() as u64);
+        buf.put_u32::<BigEndian>(key.len() as u32);
+        buf.put_slice(key);
+        buf.put_slice(payload);
         Ok(())
     }
 }

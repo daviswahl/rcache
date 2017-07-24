@@ -5,27 +5,54 @@ extern crate tokio_proto;
 extern crate tokio_service;
 extern crate bytes;
 
-use futures::{future, Future};
+use futures::{future, Future, Stream, Sink, IntoFuture};
 
-use tokio_proto::TcpServer;
+use tokio_core::reactor::Core;
+use tokio_core::net::TcpListener;
+
+use tokio_io::AsyncRead;
+
 use tokio_service::{Service, NewService};
 
 use std::{io, str};
 use std::net::SocketAddr;
 
-use proto::CacheProto;
 use message::Message;
+use cache::Cache;
+use codec::CacheCodec;
 
 /// `serve`
-pub fn serve<T>(addr: SocketAddr, new_service: T)
+pub fn serve<T>(addr: SocketAddr, s: T) -> io::Result<()>
 where
     T: NewService<Request = Message, Response = Message, Error = io::Error> + Send + Sync + 'static,
 {
-    TcpServer::new(CacheProto, addr).serve(new_service)
+    let mut core = Core::new()?;
+    let handle = core.handle();
+
+    let listener = TcpListener::bind(&addr, &handle)?;
+
+    let connections = listener.incoming();
+    let server = connections.for_each(move |(socket, _peer_addr)| {
+        let (writer, reader) = socket.framed(CacheCodec).split();
+        let service = s.new_service().unwrap();
+
+        let responses = reader.and_then(move |(req_id, msg)| {
+            service.call(msg).map(move|resp| (req_id, resp))
+        });
+
+        let server = writer.send_all(responses).then(|_| Ok(()));
+        handle.spawn(server);
+
+        Ok(())
+    });
+
+    core.run(server)
 }
 
 /// `CacheService`
-pub struct CacheService;
+pub struct CacheService {
+    pub cache: Cache,
+}
 
 impl Service for CacheService {
     type Request = Message;
@@ -34,7 +61,7 @@ impl Service for CacheService {
     type Future = Box<Future<Item = Message, Error = io::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
-        Box::new(future::ok(req))
+        future::ok(self.cache.process(req)).boxed()
     }
 }
 
@@ -46,7 +73,7 @@ impl NewService for CacheService {
     type Instance = CacheService;
 
     fn new_service(&self) -> io::Result<Self::Instance> {
-        Ok(CacheService)
+        Ok(CacheService { cache: Cache {} })
     }
 }
 
