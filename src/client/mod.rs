@@ -21,14 +21,12 @@ impl Client {
     pub fn connect(
         addr: &SocketAddr,
         handle: &Handle,
-    ) -> Box<Future<Item = Client, Error = io::Error>> {
-        Box::new(
-            TcpClient::new(codec::CacheProto)
-                .connect(addr, handle)
-                .map(|client_service| {
-                    Client { inner: service::LogService { inner: client_service } }
-                }),
-        )
+    ) -> impl Future<Item = Client, Error = io::Error> {
+        TcpClient::new(codec::CacheProto)
+            .connect(addr, handle)
+            .map(|client_service| {
+                Client { inner: service::LogService { inner: client_service } }
+            })
     }
 }
 
