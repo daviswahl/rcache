@@ -16,8 +16,10 @@ use codec::CacheCodec;
 use futures_cpupool::CpuPool;
 use std::thread;
 use std::sync::Arc;
+use std::error::Error;
 use futures::sync::oneshot;
 use stats::Stats;
+use time;
 
 /// `serve`
 pub fn serve<T>(addr: SocketAddr, s: T) -> io::Result<()>
@@ -25,19 +27,26 @@ where
     T: NewService<Request = Message, Response = Message, Error = io::Error> + 'static,
     <T::Instance as Service>::Future: 'static,
 {
+    // The primary event loop
     let mut core = Core::new()?;
     let handle = core.handle();
 
+    // Bind to the socket
     let listener = TcpListener::bind(&addr, &handle)?;
 
     let connections = listener.incoming();
+    // Iterate over the the stream of connections.
     let server = connections.for_each(move |(socket, _peer_addr)| {
+        // Split the connection into a Sink and a Stream.
         let (writer, reader) = socket.framed(CacheCodec).split();
         let service = s.new_service().unwrap();
+
+        // Map the service function onto each element in the stream.
         let responses = reader.and_then(move |(req_id, msg)| {
             service.call(msg).map(move |resp| (req_id, resp))
         });
 
+        // Finally, write out all of the responses.
         let server = writer.send_all(responses).then(|_| Ok(()));
         handle.spawn(server);
         Ok(())
@@ -58,7 +67,13 @@ impl Service for CacheService {
     type Future = Box<Future<Item = Message, Error = io::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
-        self.cache.process(req)
+        let (snd, rcv) = oneshot::channel();
+
+        self.cache.process(req, snd);
+
+        // rcv is a future that resolves when snd receives a message
+        rcv.map_err(|e| io::Error::new(io::ErrorKind::Other, e.description()))
+            .boxed()
     }
 }
 
@@ -100,8 +115,10 @@ impl<T> Service for StatService<T>
             }
             _ => {
                 let stats = self.stats.clone();
+                let start_time = time::now();
                 Box::new(self.inner.call(req).and_then(move|resp|{
-                    stats.incr_handled();
+                    stats.incr_total_requests();
+                    stats.add_request_time((time::now() - start_time).num_milliseconds() as usize);
                     Ok(resp)
                 }))
             }

@@ -113,9 +113,9 @@ fn do_client(i: u32) {
 
     let mut messages = vec![];
 
-    for i in 0..200 {
+    for i in 0..500 {
         let mut rng = rand::thread_rng();
-        let op = rng.choose(&[Op::Set, Op::Get, Op::Del]).map(|&x| x);
+        let op = rng.choose(&[Op::Get, Op::Del, Op::Set]).map(|&x| x);
 
         let key = rng.choose(
             &[

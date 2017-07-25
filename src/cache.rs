@@ -1,7 +1,7 @@
 use message::{Message, MessageBuilder, Op};
 use tokio_core::reactor::{Core, Remote};
 use std::error::Error;
-use futures::sync::oneshot;
+use futures::sync::oneshot::Sender;
 use futures_cpupool::CpuPool;
 use std::thread;
 use std::sync::{Arc, RwLock};
@@ -29,9 +29,7 @@ impl Cache {
 }
 
 impl Cache {
-    pub fn process(&self, message: Message) -> BoxFuture<Message, io::Error> {
-        let (snd, rcv) = oneshot::channel();
-
+    pub fn process(&self, message: Message, snd: Sender<Message>)  {
         let data = self.data.clone();
         let work = move || match message.op() {
             Op::Set => {
@@ -79,9 +77,6 @@ impl Cache {
             }
         };
 
-        self.core.handle().spawn(self.pool.spawn_fn(work));
-
-        rcv.map_err(|e| io::Error::new(io::ErrorKind::Other, e.description()))
-            .boxed()
+        self.core.handle().spawn(self.pool.spawn_fn(work))
     }
 }
