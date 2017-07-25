@@ -4,6 +4,7 @@
 #![plugin(clippy)]
 
 extern crate capnp;
+extern crate time;
 extern crate capnp_futures;
 extern crate futures;
 extern crate futures_cpupool;

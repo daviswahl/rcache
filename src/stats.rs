@@ -10,7 +10,6 @@ impl Stats {
         Self{handled: atomic::AtomicUsize::new(0)}
     }
     pub fn incr_handled(&self) {
-        println!("incre!");
         self.handled.fetch_add(1, atomic::Ordering::SeqCst);
     }
 

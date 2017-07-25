@@ -22,7 +22,8 @@ use stats::Stats;
 /// `serve`
 pub fn serve<T>(addr: SocketAddr, s: T) -> io::Result<()>
 where
-    T: NewService<Request = Message, Response = Message, Error = io::Error> + Send + Sync + 'static,
+    T: NewService<Request = Message, Response = Message, Error = io::Error> + 'static,
+    <T::Instance as Service>::Future: 'static,
 {
     let mut core = Core::new()?;
     let handle = core.handle();
@@ -33,7 +34,6 @@ where
     let server = connections.for_each(move |(socket, _peer_addr)| {
         let (writer, reader) = socket.framed(CacheCodec).split();
         let service = s.new_service().unwrap();
-
         let responses = reader.and_then(move |(req_id, msg)| {
             service.call(msg).map(move |resp| (req_id, resp))
         });
@@ -48,7 +48,7 @@ where
 
 /// `CacheService`
 pub struct CacheService {
-    pub cache: cache::Cache,
+    pub cache: Arc<cache::Cache>,
 }
 
 impl Service for CacheService {
@@ -69,14 +69,14 @@ impl NewService for CacheService {
     type Instance = CacheService;
 
     fn new_service(&self) -> io::Result<Self::Instance> {
-        Ok(CacheService { cache: cache::Cache::new()? })
+        Ok(CacheService { cache: self.cache.clone() })
     }
 }
 
 /// `StatService`
 pub struct StatService<T> {
     pub inner: T,
-    pub stats: Arc<Stats>
+    pub stats: Arc<Stats>,
 }
 
 impl<T> Service for StatService<T>
@@ -91,10 +91,10 @@ impl<T> Service for StatService<T>
         match req.op() {
             Op::Stats => {
                 let payload = self.stats.get_stats();
-                println!("payload: {}", payload);
                 let mut mb = MessageBuilder::default();
                 {
-                    mb.set_op(Op::Stats).set_payload(payload.into_bytes()).set_type_id(1).set_key("".to_owned().into_bytes());
+                    mb.set_op(Op::Stats).set_payload(payload.into_bytes())
+                        .set_type_id(1).set_key("".to_owned().into_bytes());
                 }
                 Box::new(future::done(mb.into_message()))
             }
@@ -125,7 +125,10 @@ where
 
     fn new_service(&self) -> io::Result<Self::Instance> {
         let inner = self.inner.new_service()?;
-        Ok(StatService { inner: inner, stats: Arc::new(Stats::new()) })
+        Ok(StatService {
+            inner: inner,
+            stats: self.stats.clone(),
+        })
     }
 }
 
@@ -143,9 +146,7 @@ impl<T> Service for LogService<T>
     type Future = Box<Future<Item = Message, Error = io::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
-        println!("Got Request! {:?}", req);
         Box::new(self.inner.call(req).and_then(|resp| {
-            println!("Got Response: {:?}", resp);
             Ok(resp)
         }))
     }

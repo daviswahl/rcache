@@ -37,10 +37,12 @@ impl Cache {
             Op::Set => {
                 let (key, payload) = message.consume();
 
-                data.write().map(|mut cache| cache.insert(key, payload));
 
-                snd.send(MessageBuilder::default().set_op(Op::Set).finish().unwrap());
-                future::ok(())
+                data.write().map(|mut cache| {
+                    cache.insert(key, payload);
+                }).unwrap();
+
+                future::ok(snd.send(MessageBuilder::default().set_op(Op::Set).finish().unwrap()).unwrap())
             }
 
             Op::Get => {
@@ -51,13 +53,13 @@ impl Cache {
                     {
                         let mut mb = MessageBuilder::new();
                         {
-                            mb.set_type_id(*type_id).set_payload(data.clone());
+                            mb.set_type_id(*type_id).set_payload(data.clone()).set_op(Op::Get);
                         }
                         snd.send(mb.into_message().unwrap());
                     } else {
                         let mut mb = MessageBuilder::default();
                         {
-                            mb.set_op(Op::Get);
+                            mb.set_op(Op::Get).set_key(key.to_vec());
                         }
                         snd.send(mb.into_message().unwrap());
                     })
