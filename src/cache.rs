@@ -71,6 +71,10 @@ impl Cache {
                 snd.send(message);
                 future::ok(())
             }
+            Op::Stats => {
+                snd.send(message);
+                future::ok(())
+            }
         };
 
         self.core.handle().spawn(self.pool.spawn_fn(work));

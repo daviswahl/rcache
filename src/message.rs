@@ -146,6 +146,7 @@ pub enum Op {
     Set = 0,
     Get = 1,
     Del = 2,
+    Stats = 3,
 }
 
 impl TryFrom<u8> for Op {
@@ -156,6 +157,7 @@ impl TryFrom<u8> for Op {
             0 => Ok(Op::Set),
             1 => Ok(Op::Get),
             2 => Ok(Op::Del),
+            3 => Ok(Op::Stats),
             _ => Err(io::Error::new(io::ErrorKind::InvalidData, "unknown op")),
         }
     }

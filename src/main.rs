@@ -18,6 +18,7 @@ use tokio_core::reactor::Core;
 use tokio_service::{Service, NewService};
 use std::thread;
 use rand::Rng;
+use rcache::stats::Stats;
 
 
 fn main() {
@@ -39,6 +40,18 @@ fn main() {
                     println!("{}", i);
                 }
             }
+            "stats" => {
+                let mut core = Core::new().unwrap();
+                let client = client::Client::connect(&"127.0.0.1:12345".parse().unwrap(), &core.handle());
+                let mut msg = MessageBuilder::new().set_op(Op::Stats).finish().unwrap();
+                let req = client.and_then(|client| {
+                   client.call(msg).and_then(|resp| {
+                       println!("{}", String::from_utf8(resp.payload().unwrap().to_owned()).unwrap());
+                       Ok(())
+                   })
+                });
+                core.run(req);
+            }
             _ => (),
         }
     }
@@ -46,9 +59,11 @@ fn main() {
 
 fn do_server() {
     service::serve("127.0.0.1:12345".parse().unwrap(), || {
-        Ok(service::LogService {
-            inner: service::CacheService { cache: cache::Cache::new().unwrap() },
-        })
+        Ok(service::StatService { stats: Arc::new(Stats::new()), inner: {
+            service::LogService {
+                inner: service::CacheService { cache: cache::Cache::new().unwrap() },
+            }
+        }})
     }).unwrap();
 }
 fn do_client(i: u32) {
