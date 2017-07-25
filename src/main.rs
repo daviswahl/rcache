@@ -27,7 +27,7 @@ fn main() {
         match arg.as_str() {
             "server" => do_server(),
             "client3" => do_client2(),
-            "client2" => do_client(1),
+            "client2" => loop { do_client(1) }
             "client" => {
                 let start = time::now();
                 let mut children = vec![];
@@ -45,12 +45,12 @@ fn main() {
                 let mut core = Core::new().unwrap();
                 let client =
                     client::Client::connect(&"127.0.0.1:12345".parse().unwrap(), &core.handle());
-                let mut msg = MessageBuilder::new().set_op(Op::Stats).finish().unwrap();
+                let mut msg = MessageBuilder::new().set_op(Op::Stats).set_key("foo".into()).request().unwrap();
                 let req = client.and_then(|client| {
                     client.call(msg).and_then(|resp| {
                         println!(
                             "{}",
-                            String::from_utf8(resp.payload().unwrap().to_owned()).unwrap()
+                            String::from_utf8(resp.payload().unwrap().data().to_owned()).unwrap()
                         );
                         Ok(())
                     })
@@ -85,13 +85,13 @@ fn do_client2() {
             .set_key("foo".to_owned().into_bytes())
             .set_payload("bar".to_owned().into_bytes());
     }
-    let msg1 = message_builder.finish().unwrap();
+    let msg1 = message_builder.request().unwrap();
 
     {
         message_builder.set_op(Op::Get);
     }
 
-    let msg2 = message_builder.finish().unwrap();
+    let msg2 = message_builder.request().unwrap();
 
     {
         let mut core = Core::new().unwrap();
@@ -141,7 +141,7 @@ fn do_client(i: u32) {
                 .set_key(key.unwrap().to_owned().into_bytes())
                 .set_payload(buf.to_owned());
         }
-        messages.push(message_builder.finish().unwrap())
+        messages.push(message_builder.request().unwrap())
     }
 
     core.run(client.and_then(move |client| {

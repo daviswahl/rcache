@@ -10,7 +10,7 @@ use tokio_service::{Service, NewService};
 use std::{io, str};
 use std::net::SocketAddr;
 
-use message::{Message, MessageBuilder, Op};
+use message::{Message, MessageBuilder, Op, Code};
 use cache;
 use codec::CacheCodec;
 use futures_cpupool::CpuPool;
@@ -109,9 +109,9 @@ impl<T> Service for StatService<T>
                 let mut mb = MessageBuilder::default();
                 {
                     mb.set_op(Op::Stats).set_payload(payload.into_bytes())
-                        .set_type_id(1).set_key("".to_owned().into_bytes());
+                        .set_type_id(1).set_code(Code::Ok);
                 }
-                Box::new(future::done(mb.into_message()))
+                Box::new(future::done(mb.into_response()))
             }
             _ => {
                 let stats = self.stats.clone();

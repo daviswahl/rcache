@@ -1,4 +1,4 @@
-use message::{Message, MessageBuilder, Op};
+use message::{Message, MessageBuilder, Op, Code};
 use tokio_core::reactor::{Core, Remote};
 use std::error::Error;
 use futures::sync::oneshot::Sender;
@@ -35,12 +35,11 @@ impl Cache {
             Op::Set => {
                 let (key, payload) = message.consume();
 
-
                 data.write().map(|mut cache| {
-                    cache.insert(key, payload);
+                    cache.insert(key.unwrap(), payload.unwrap().into());
                 }).unwrap();
 
-                future::ok(snd.send(MessageBuilder::default().set_op(Op::Set).finish().unwrap()).unwrap())
+                future::ok(snd.send(MessageBuilder::default().set_op(Op::Set).set_code(Code::Ok).response().unwrap()).unwrap())
             }
 
             Op::Get => {
@@ -51,15 +50,15 @@ impl Cache {
                     {
                         let mut mb = MessageBuilder::new();
                         {
-                            mb.set_type_id(*type_id).set_payload(data.clone()).set_op(Op::Get);
+                            mb.set_type_id(*type_id).set_payload(data.clone()).set_op(Op::Get).set_code(Code::Ok);
                         }
-                        snd.send(mb.into_message().unwrap());
+                        snd.send(mb.response().unwrap());
                     } else {
                         let mut mb = MessageBuilder::default();
                         {
-                            mb.set_op(Op::Get).set_key(key.to_vec());
+                            mb.set_op(Op::Get).set_code(Code::Miss);
                         }
-                        snd.send(mb.into_message().unwrap());
+                        snd.send(mb.response().unwrap());
                     })
                     .unwrap();
                 future::ok(())
@@ -68,7 +67,11 @@ impl Cache {
 
             Op::Del => {
                 // Probably never going to do this
-                snd.send(message);
+                let mut mb = MessageBuilder::new();
+                {
+                    mb.set_op(Op::Del).set_code(Code::Ok);
+                }
+                snd.send(mb.into_response().unwrap());
                 future::ok(())
             }
             Op::Stats => {
