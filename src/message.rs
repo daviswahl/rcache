@@ -25,6 +25,12 @@ impl Message {
     pub fn payload(&self) -> Option<&[u8]> {
         self.payload.as_ref().map(|p| p.data.as_ref())
     }
+
+    pub fn consume(self) -> (Vec<u8>, (u32, Vec<u8>)) {
+        let payload = self.payload.unwrap();
+        let key = self.key.unwrap();
+        (key, (payload.type_id, payload.data))
+    }
 }
 
 /// `MessageBuilder`
@@ -129,6 +135,11 @@ pub struct Payload {
     data: Vec<u8>,
 }
 
+impl Payload {
+    pub fn data(self) -> Vec<u8> {
+        self.data
+    }
+}
 /// `Op`
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Op {
