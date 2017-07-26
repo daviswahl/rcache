@@ -3,12 +3,14 @@ use tokio_core::reactor::Core;
 use std::error::Error;
 use futures::sync::oneshot::Sender;
 use futures_cpupool::CpuPool;
-use std::sync::{Arc, RwLock};
-use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use futures::future;
 use std::io;
 use error;
 use lru_cache::LruCache;
+
+
+type Store = Arc<Mutex<LruCache<Vec<u8>, (u32, Vec<u8>)>>>;
 
 /// `Cache`
 pub struct Cache {
@@ -17,13 +19,12 @@ pub struct Cache {
     store: Store,
 }
 
-type Store = Arc<RwLock<LruCache<Vec<u8>, (u32, Vec<u8>)>>>;
 impl Cache {
     pub fn new() -> Result<Self, io::Error> {
         Ok(Cache {
             pool: CpuPool::new_num_cpus(),
             core: Core::new()?,
-            store: Arc::new(RwLock::new(LruCache::new(40000))),
+            store: Arc::new(Mutex::new(LruCache::new(40000))),
         })
     }
 }
@@ -63,8 +64,7 @@ fn handle(store: Store, message: Message) -> Result<Message, error::Error> {
             let key = key.ok_or_else(|| "no key given to set op")?;
             let payload = payload.ok_or_else(|| "no payload given to set op")?;
 
-            store
-                .write()
+            store.lock()
                 .map(|mut store| { store.insert(key, payload.into()); })
                 .map_err(|e| {
                     error::Error::new(error::ErrorKind::Other, e.description())
@@ -76,7 +76,7 @@ fn handle(store: Store, message: Message) -> Result<Message, error::Error> {
         Op::Get => {
             let key = key.ok_or_else(|| "no key given to get op")?;
             store
-                .write()
+                .lock()
                 .map(|mut store| if let Some(&mut (ref type_id, ref data)) =
                     store.get_mut(key.as_slice())
                 {
