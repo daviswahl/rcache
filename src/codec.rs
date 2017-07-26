@@ -170,7 +170,6 @@ mod tests {
         let mut codec = CacheCodec;
 
         codec.encode((req_id, msg.clone()), &mut buf).unwrap();
-        println!("encoded: {:?}", buf);
         let (decoded_req, decoded_message) = codec.decode(&mut buf).unwrap().unwrap();
 
         assert_eq!(decoded_req, req_id);
@@ -186,7 +185,6 @@ mod tests {
         let mut codec = CacheCodec;
 
         codec.encode((req_id, msg.clone()), &mut buf).unwrap();
-        println!("encoded: {:?}", buf);
         let (decoded_req, decoded_message) = codec.decode(&mut buf).unwrap().unwrap();
 
         assert_eq!(decoded_req, req_id);

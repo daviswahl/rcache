@@ -87,25 +87,14 @@ fn do_client() {
         let mut rng = rand::thread_rng();
         let op = rng.choose(&[Op::Get, Op::Del, Op::Set]).cloned();
 
-        let key = rng.choose(
-            &[
-                "foo",
-                "bar",
-                "batz",
-                "zig",
-                "zag",
-                "zowie",
-                "wowie",
-                "blammo",
-                "rammo",
-            ],
-        ).map(|&x| x);
+        let mut key_buf: [u8; 4] = [0; 4];
+        rng.fill_bytes(&mut key_buf);
 
         let mut buf: [u8; 100] = [0; 100];
         rng.fill_bytes(&mut buf);
         let msg = request(
             op.unwrap(),
-            key.unwrap().to_owned().into_bytes(),
+            key_buf.to_vec(),
             Some(payload(i, buf.to_owned())),
         );
         messages.push(msg)
