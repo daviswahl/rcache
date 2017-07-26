@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use futures::future;
 use std::io;
 use error;
+use lru_cache::LruCache;
 
 /// `Cache`
 pub struct Cache {
@@ -16,13 +17,13 @@ pub struct Cache {
     store: Store,
 }
 
-type Store = Arc<RwLock<HashMap<Vec<u8>, (u32, Vec<u8>)>>>;
+type Store = Arc<RwLock<LruCache<Vec<u8>, (u32, Vec<u8>)>>>;
 impl Cache {
     pub fn new() -> Result<Self, io::Error> {
         Ok(Cache {
             pool: CpuPool::new_num_cpus(),
             core: Core::new()?,
-            store: Arc::new(RwLock::new(HashMap::new())),
+            store: Arc::new(RwLock::new(LruCache::new(40000))),
         })
     }
 }
@@ -75,9 +76,9 @@ fn handle(store: Store, message: Message) -> Result<Message, error::Error> {
         Op::Get => {
             let key = key.ok_or_else(|| "no key given to get op")?;
             store
-                .read()
-                .map(|store| if let Some(&(ref type_id, ref data)) =
-                    store.get(key.as_slice())
+                .write()
+                .map(|mut store| if let Some(&mut (ref type_id, ref data)) =
+                    store.get_mut(key.as_slice())
                 {
                     builder
                         .set_type_id(*type_id)
