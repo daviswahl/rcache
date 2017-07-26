@@ -24,3 +24,4 @@ pub mod message;
 pub mod proto;
 pub mod cache;
 pub mod stats;
+pub mod error;

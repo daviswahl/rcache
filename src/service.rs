@@ -111,7 +111,7 @@ impl<T> Service for StatService<T>
                     mb.set_op(Op::Stats).set_payload(payload.into_bytes())
                         .set_type_id(1).set_code(Code::Ok);
                 }
-                Box::new(future::done(mb.into_response()))
+                Box::new(future::done(mb.into_response()).from_err())
             }
             _ => {
                 let stats = self.stats.clone();

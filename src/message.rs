@@ -1,4 +1,5 @@
 use std::convert::TryFrom;
+use error;
 use std::io;
 
 /// `Message`
@@ -99,7 +100,7 @@ impl MessageBuilder {
         self
     }
 
-    pub fn into_request(self) -> Result<Message, io::Error> {
+    pub fn into_request(self) -> Result<Message, error::Error> {
         let payload = if let Some(payload) = self.payload {
             if let Some(type_id) = self.type_id {
                 Some(Payload {
@@ -107,22 +108,22 @@ impl MessageBuilder {
                     data: payload,
                 })
             } else {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "no type_id set"));
+                return Err(error::Error::new(error::ErrorKind::InvalidData, "no type_id set"));
             }
         } else {
             None
         };
 
         let op = self.op.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "no op set")
+            error::Error::new(error::ErrorKind::InvalidData, "no op set")
         })?;
         let key = self.key.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "no key set")
+            error::Error::new(error::ErrorKind::InvalidData, "no key set")
         })?;
         Ok(Message::Request(op, key, payload))
     }
 
-    pub fn into_response(self) -> Result<Message, io::Error> {
+    pub fn into_response(self) -> Result<Message, error::Error> {
         let payload = if let Some(payload) = self.payload {
             if let Some(type_id) = self.type_id {
                 Some(Payload {
@@ -130,8 +131,8 @@ impl MessageBuilder {
                     data: payload,
                 })
             } else {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
+                return Err(error::Error::new(
+                    error::ErrorKind::InvalidData,
                     "payload given but no type_id set",
                 ));
             }
@@ -139,15 +140,15 @@ impl MessageBuilder {
             None
         };
         let op = self.op.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "no op set")
+            error::Error::new(error::ErrorKind::InvalidData, "no op set")
         })?;
         let code = self.code.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "no code set")
+            error::Error::new(error::ErrorKind::InvalidData, "no code set")
         })?;
         Ok(Message::Response(op, code, payload))
     }
 
-    pub fn request(&self) -> Result<Message, io::Error> {
+    pub fn request(&self) -> Result<Message, error::Error> {
         let payload = if let Some(payload) = self.payload.clone() {
             if let Some(type_id) = self.type_id {
                 Some(Payload {
@@ -155,8 +156,8 @@ impl MessageBuilder {
                     data: payload,
                 })
             } else {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
+                return Err(error::Error::new(
+                    error::ErrorKind::InvalidData,
                     "payload given but no type_id set",
                 ));
             }
@@ -165,10 +166,10 @@ impl MessageBuilder {
         };
 
         let op = self.op.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "no op set")
+            error::Error::new(error::ErrorKind::InvalidData, "no op set")
         })?;
         let key = self.key.clone().ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "no key set")
+            error::Error::new(error::ErrorKind::InvalidData, "no key set")
         })?;
         Ok(Message::Request(
             op,
@@ -177,7 +178,7 @@ impl MessageBuilder {
         ))
     }
 
-    pub fn response(&self) -> Result<Message, io::Error> {
+    pub fn response(&self) -> Result<Message, error::Error> {
         let payload = if let Some(payload) = self.payload.clone() {
             if let Some(type_id) = self.type_id {
                 Some(Payload {
@@ -185,8 +186,8 @@ impl MessageBuilder {
                     data: payload,
                 })
             } else {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
+                return Err(error::Error::new(
+                    error::ErrorKind::InvalidData,
                     "payload given but no type_id set",
                 ));
             }
@@ -194,10 +195,10 @@ impl MessageBuilder {
             None
         };
         let op = self.op.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "no op set")
+            error::Error::new(error::ErrorKind::InvalidData, "no op set")
         })?;
         let code = self.code.ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidData, "no code set")
+            error::Error::new(error::ErrorKind::InvalidData, "no code set")
         })?;
         Ok(Message::Response(
             op,
@@ -235,7 +236,7 @@ pub enum Op {
 }
 
 impl TryFrom<u8> for Op {
-    type Error = io::Error;
+    type Error = error::Error;
 
     fn try_from(i: u8) -> Result<Self, Self::Error> {
         match i {
@@ -243,7 +244,7 @@ impl TryFrom<u8> for Op {
             1 => Ok(Op::Get),
             2 => Ok(Op::Del),
             3 => Ok(Op::Stats),
-            _ => Err(io::Error::new(io::ErrorKind::InvalidData, "unknown op")),
+            _ => Err(error::Error::new(error::ErrorKind::InvalidData, "unknown op")),
         }
     }
 }
@@ -257,14 +258,14 @@ pub enum Code {
 }
 
 impl TryFrom<u8> for Code {
-    type Error = io::Error;
+    type Error = error::Error;
 
     fn try_from(i: u8) -> Result<Self, Self::Error> {
         match i {
             0 => Ok(Code::Req),
             1 => Ok(Code::Ok),
             2 => Ok(Code::Miss),
-            _ => Err(io::Error::new(io::ErrorKind::InvalidData, "unknown code")),
+            _ => Err(error::Error::new(error::ErrorKind::InvalidData, "unknown code")),
         }
     }
 }

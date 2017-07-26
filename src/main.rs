@@ -27,7 +27,7 @@ fn main() {
         match arg.as_str() {
             "server" => do_server(),
             "client3" => do_client2(),
-            "client2" => loop { do_client(1) }
+            "client2" => do_client(1),
             "client" => {
                 let start = time::now();
                 let mut children = vec![];
@@ -45,7 +45,11 @@ fn main() {
                 let mut core = Core::new().unwrap();
                 let client =
                     client::Client::connect(&"127.0.0.1:12345".parse().unwrap(), &core.handle());
-                let mut msg = MessageBuilder::new().set_op(Op::Stats).set_key("foo".into()).request().unwrap();
+                let mut msg = MessageBuilder::new()
+                    .set_op(Op::Stats)
+                    .set_key("foo".into())
+                    .request()
+                    .unwrap();
                 let req = client.and_then(|client| {
                     client.call(msg).and_then(|resp| {
                         println!(
