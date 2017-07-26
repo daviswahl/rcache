@@ -22,11 +22,9 @@ impl Client {
         addr: &SocketAddr,
         handle: &Handle,
     ) -> impl Future<Item = Client, Error = io::Error> {
-        TcpClient::new(CacheProto)
-            .connect(addr, handle)
-            .map(|client_service| {
-                Client { inner: service::LogService { inner: client_service } }
-            })
+        TcpClient::new(CacheProto).connect(addr, handle).map(
+            |client_service| Client { inner: service::LogService { inner: client_service } },
+        )
     }
 }
 

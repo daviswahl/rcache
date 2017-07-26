@@ -17,7 +17,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::Other => "Other",
             ErrorKind::InvalidData => "InvalidData",
             ErrorKind::UnknownOp => "Unknown Op",
-            ErrorKind::BadMessage => "Bad Message"
+            ErrorKind::BadMessage => "Bad Message",
         };
         write!(f, "{}", s)
     }
@@ -32,7 +32,10 @@ pub struct Error {
 
 impl Error {
     pub fn new(kind: ErrorKind, description: &str) -> Self {
-        Self{kind: kind, description: description.to_owned()}
+        Self {
+            kind: kind,
+            description: description.to_owned(),
+        }
     }
 }
 
@@ -58,4 +61,3 @@ impl From<Error> for io::Error {
         io::Error::new(io::ErrorKind::Other, e)
     }
 }
-

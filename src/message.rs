@@ -17,7 +17,6 @@ pub fn response(op: Op, code: Code, payload: Option<Payload>) -> Message {
 }
 
 impl Message {
-
     pub fn key(&self) -> Option<&[u8]> {
         match *self {
             Message::Request(_, ref key, _) => Some(key.as_slice()),
@@ -47,7 +46,7 @@ impl Message {
 
     pub fn payload(&self) -> Option<&Payload> {
         match *self {
-            Message::Request(_, _, ref payload)  |
+            Message::Request(_, _, ref payload) |
             Message::Response(_, _, ref payload) => payload.as_ref(),
         }
     }
@@ -55,7 +54,10 @@ impl Message {
     pub fn consume_request(self) -> Result<(Vec<u8>, Option<Payload>), error::Error> {
         match self {
             Message::Request(_, key, payload) => Ok((key, payload)),
-            Message::Response(..) => Err(error::Error::new(error::ErrorKind::BadMessage, "expected a request, got a response"))
+            Message::Response(..) => Err(error::Error::new(
+                error::ErrorKind::BadMessage,
+                "expected a request, got a response",
+            )),
         }
     }
 }
@@ -73,14 +75,11 @@ impl Payload {
     }
 }
 
-impl From<Payload> for (u32, Vec<u8>) {
-    fn from(payload: Payload) -> Self {
-        (payload.type_id, payload.data)
-    }
-}
-
 pub fn payload(type_id: u32, data: Vec<u8>) -> Payload {
-    Payload{type_id: type_id, data: data}
+    Payload {
+        type_id: type_id,
+        data: data,
+    }
 }
 
 /// `Op`
@@ -101,7 +100,10 @@ impl TryFrom<u8> for Op {
             1 => Ok(Op::Get),
             2 => Ok(Op::Del),
             3 => Ok(Op::Stats),
-            _ => Err(error::Error::new(error::ErrorKind::UnknownOp, "got an unknown op code")),
+            _ => Err(error::Error::new(
+                error::ErrorKind::UnknownOp,
+                "got an unknown op code",
+            )),
         }
     }
 }
@@ -124,7 +126,10 @@ impl TryFrom<u8> for Code {
             1 => Ok(Code::Ok),
             2 => Ok(Code::Miss),
             3 => Ok(Code::Error),
-            _ => Err(error::Error::new(error::ErrorKind::InvalidData, "unknown code")),
+            _ => Err(error::Error::new(
+                error::ErrorKind::InvalidData,
+                "unknown code",
+            )),
         }
     }
 }

@@ -13,13 +13,21 @@ impl Stats {
     }
 
     pub fn add_request_time(&self, millis: usize) {
-       self.total_request_time.fetch_add(millis, atomic::Ordering::SeqCst);
+        self.total_request_time.fetch_add(
+            millis,
+            atomic::Ordering::SeqCst,
+        );
     }
 
     pub fn get_stats(&self) -> String {
         let total_requests = self.total_requests.load(atomic::Ordering::SeqCst);
         let total_requests_time = self.total_request_time.load(atomic::Ordering::SeqCst);
-        let avg_request_time =  total_requests_time / total_requests;
-        format!("total_requests: {}, total_request_time: {} millis, avg_request_time: {} millis",total_requests, total_requests_time, avg_request_time)
+        let avg_request_time = total_requests_time / total_requests;
+        format!(
+            "total_requests: {}, total_request_time: {} millis, avg_request_time: {} millis",
+            total_requests,
+            total_requests_time,
+            avg_request_time
+        )
     }
 }

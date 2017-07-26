@@ -1,4 +1,4 @@
-use message::{self, Message, Op, Code};
+use message::{self, Message, Op, Code, Payload};
 use tokio_core::reactor::Core;
 use std::error::Error;
 use futures::sync::oneshot::Sender;
@@ -10,7 +10,7 @@ use error;
 use lru_cache::LruCache;
 
 
-type Store = Arc<Mutex<LruCache<Vec<u8>, (u32, Vec<u8>)>>>;
+type Store = Arc<Mutex<LruCache<Vec<u8>, Payload>>>;
 
 /// `Cache`
 pub struct Cache {
@@ -53,16 +53,16 @@ impl Cache {
 
 fn handle(store: Store, message: Message) -> Result<Message, error::Error> {
     let op = message.op();
-    let (key, data) = message.consume_request()?;
+    let (key, payload) = message.consume_request()?;
 
     let response = match op {
         Op::Set => {
             let key = key;
-            let data = data.ok_or_else(|| "no payload given to set op")?;
+            let payload = payload.ok_or_else(|| "no payload given to set op")?;
 
             store
                 .lock()
-                .map(|mut store| { store.insert(key, data.into()); })
+                .map(|mut store| { store.insert(key, payload); })
                 .map_err(|e| {
                     error::Error::new(error::ErrorKind::Other, e.description())
                 })?;
@@ -73,12 +73,12 @@ fn handle(store: Store, message: Message) -> Result<Message, error::Error> {
         Op::Get => {
             store
                 .lock()
-                .map(|mut store| if let Some(&mut (ref type_id, ref data)) =
+                .map(|mut store| if let Some(ref mut payload) =
                     store.get_mut(key.as_slice())
                 {
-                    message::response(Op::Get, Code::Ok, Some(message::payload(*type_id, data.clone())))
+                    message::response(Op::Get, Code::Ok, Some(payload.clone()))
                 } else {
-                  message::response(Op::Get, Code::Miss, None)
+                    message::response(Op::Get, Code::Miss, None)
                 })
                 .map_err(|e| {
                     error::Error::new(error::ErrorKind::Other, e.description())
@@ -101,6 +101,9 @@ fn handle_error(err: &error::Error) -> Message {
     message::response(
         Op::Get,
         Code::Error,
-        Some(message::payload(0, err.description().to_owned().into_bytes())),
+        Some(message::payload(
+            0,
+            err.description().to_owned().into_bytes(),
+        )),
     )
 }

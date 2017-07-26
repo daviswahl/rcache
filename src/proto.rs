@@ -1,6 +1,6 @@
 use codec::CacheCodec;
 use message::Message;
-use tokio_io::codec::{Framed};
+use tokio_io::codec::Framed;
 use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_proto::multiplex::{ClientProto, ServerProto};
 use std::io;
