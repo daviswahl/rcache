@@ -29,24 +29,28 @@ impl Encoder for CacheCodec {
     fn encode(&mut self, msg: (RequestId, Message), buf: &mut BytesMut) -> io::Result<()> {
         let (request_id, msg) = msg;
 
-
         let key = msg.key().unwrap_or_else(|| &[]);
         let payload = msg.payload().map(|p| p.data()).unwrap_or_else(|| &[]);
-        // TODO: return Err if payload is given but no type id
         let type_id = msg.type_id().unwrap_or(0 as u32);
-        let payload_len = if payload.is_empty() {
+
+        let type_id_len = if payload.is_empty() {
             0
         } else {
-            payload.len() + 4
+            4
         };
-        let min_size = HEADER_LEN + key.len() + payload_len;
+
+        let payload_len = payload.len();
+
+        let min_size = HEADER_LEN + key.len() + payload_len + type_id_len;
         buf.reserve(min_size);
+
         buf.put_u64::<BigEndian>(request_id as u64);
         buf.put_u8(msg.code() as u8);
         buf.put_u8(msg.op() as u8);
-        buf.put_u64::<BigEndian>(payload.len() as u64);
+        buf.put_u64::<BigEndian>(payload_len as u64);
         buf.put_u32::<BigEndian>(key.len() as u32);
         buf.put_slice(key);
+
         if payload_len > 0 {
             buf.put_u32::<BigEndian>(type_id);
             buf.put_slice(payload);
@@ -80,27 +84,29 @@ impl Decoder for CacheCodec {
         }
 
         let msg = buf.split_to(msg_len);
-        let request_id = io::Cursor::new(&msg[0..8]).get_u64::<BigEndian>();
-        let code = io::Cursor::new(&msg[8..9]).get_u8();
-        let op = io::Cursor::new(&msg[9..10]).get_u8();
+        let mut cursor = io::Cursor::new(msg);
+        let request_id = cursor.get_u64::<BigEndian>();
+        let code = cursor.get_u8();
+        let op = cursor.get_u8();
 
-        let key = &msg[HEADER_LEN..HEADER_LEN + key_len];
-        let type_id = if payload_len > 0 {
-            io::Cursor::new(&msg[HEADER_LEN + key_len..HEADER_LEN + key_len + 4])
-                .get_u32::<BigEndian>()
-        } else {
-            0
-        };
+        // Skip the payload_len and key_len as they've been read already.
+        cursor.advance(12);
+
+        // read the key
+        let mut key = Vec::with_capacity(key_len);
+        key.resize(key_len, 0);
+        cursor.copy_to_slice(&mut key);
+
+        let type_id = if payload_len > 0 { cursor.get_u32::<BigEndian>() } else { 0 };
 
         let payload = if payload_len > 0 {
-            let data = &msg[HEADER_LEN + key_len + 4..HEADER_LEN + key_len + payload_len];
-            Some(message::payload(type_id, data.to_owned()))
+            Some(message::payload(type_id, cursor.collect()))
         } else {
             None
         };
 
         let msg = if code == 0 {
-            message::request(Op::try_from(op)?, key.to_owned(), payload)
+            message::request(Op::try_from(op)?, key.to_vec(), payload)
         } else {
             message::response(Op::try_from(op)?, Code::try_from(code)?, payload)
         };
