@@ -120,6 +120,7 @@ impl Decoder for CacheCodec {
 mod tests {
     use super::*;
     use message::Op;
+    use test::Bencher;
 
     #[test]
 
@@ -195,5 +196,38 @@ mod tests {
 
         assert_eq!(decoded_req, req_id);
         assert_eq!(decoded_message, msg);
+    }
+
+    #[bench]
+    fn bench_encoding(b: &mut Bencher) {
+        let msg = message::response(
+            Op::Get,
+            Code::Ok,
+            Some(message::payload(3, "123124125".into())),
+        );
+        let mut codec = CacheCodec;
+        let req_id = 123 as RequestId;
+
+        b.iter(|| {
+            let mut buf = BytesMut::new();
+            codec.encode((req_id, msg.clone()), &mut buf);
+        });
+    }
+
+    #[bench]
+    fn bench_decoding(b: &mut Bencher) {
+        let msg = message::response(
+            Op::Get,
+            Code::Ok,
+            Some(message::payload(3, "123124125".into())),
+        );
+        let mut codec = CacheCodec;
+        let req_id = 123 as RequestId;
+        let mut buf = BytesMut::new();
+        codec.encode((req_id, msg.clone()), &mut buf).unwrap();
+
+        b.iter(|| {
+            codec.decode(&mut buf.clone())
+        });
     }
 }

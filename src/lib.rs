@@ -1,6 +1,7 @@
 #![feature(conservative_impl_trait)]
 #![feature(try_from)]
 #![feature(plugin)]
+#![feature(test)]
 #![plugin(clippy)]
 
 #![allow(match_same_arms)]
@@ -18,6 +19,7 @@ extern crate deque;
 extern crate bytes;
 extern crate rand;
 extern crate lru_cache;
+extern crate test;
 
 pub mod codec;
 pub mod client;
