@@ -11,7 +11,7 @@ use std::env;
 use rcache::client;
 use rcache::service;
 use rcache::cache;
-use rcache::message::{MessageBuilder, Op};
+use rcache::message::{request, payload, Op};
 use futures::Future;
 use std::sync::Arc;
 use tokio_core::reactor::Core;
@@ -25,7 +25,6 @@ fn main() {
     for arg in env::args().skip(1) {
         match arg.as_str() {
             "server" => do_server(),
-            "client3" => do_client2(),
             "client2" => do_client(),
             "client" => {
                 let start = time::now();
@@ -44,11 +43,7 @@ fn main() {
                 let mut core = Core::new().unwrap();
                 let client =
                     client::Client::connect(&"127.0.0.1:12345".parse().unwrap(), &core.handle());
-                let msg = MessageBuilder::default()
-                    .set_op(Op::Stats)
-                    .set_key("foo".into())
-                    .request()
-                    .unwrap();
+                let msg = request(Op::Stats, "foo".into(), None);
                 let req = client.and_then(|client| {
                     client.call(msg).and_then(|resp| {
                         println!(
@@ -72,43 +67,15 @@ fn do_server() {
             stats: Arc::new(Stats::default()),
             inner: {
                 service::LogService {
-                    inner: service::CacheService { cache: Arc::new(cache::Cache::new().unwrap()) },
+                    inner: service::CacheService {
+                        cache: Arc::new(cache::Cache::new(40000).unwrap()),
+                    },
                 }
             },
         },
     ).unwrap();
 }
 
-fn do_client2() {
-    let mut message_builder = MessageBuilder::new();
-    {
-        message_builder
-            .set_op(Op::Set)
-            .set_type_id(1)
-            .set_key("foo".to_owned().into_bytes())
-            .set_payload("bar".to_owned().into_bytes());
-    }
-    let msg1 = message_builder.request().unwrap();
-
-    {
-        message_builder.set_op(Op::Get);
-    }
-
-    let msg2 = message_builder.request().unwrap();
-
-    {
-        let mut core = Core::new().unwrap();
-        let client = client::Client::connect(&"127.0.0.1:12345".parse().unwrap(), &core.handle());
-        let client2 = client::Client::connect(&"127.0.0.1:12345".parse().unwrap(), &core.handle());
-
-        core.run(client.and_then(|client| {
-            client.call(msg1).map(|resp| println!("resp1: {:?}", resp))
-        })).unwrap();
-        core.run(client2.and_then(|client| {
-            client.call(msg2).map(|resp| println!("resp2: {:?}", resp))
-        })).unwrap();
-    }
-}
 fn do_client() {
     let mut core = Core::new().unwrap();
 
@@ -136,15 +103,12 @@ fn do_client() {
 
         let mut buf: [u8; 100] = [0; 100];
         rng.fill_bytes(&mut buf);
-        let mut message_builder = MessageBuilder::new();
-        {
-            message_builder
-                .set_op(op.unwrap())
-                .set_type_id(i)
-                .set_key(key.unwrap().to_owned().into_bytes())
-                .set_payload(buf.to_owned());
-        }
-        messages.push(message_builder.request().unwrap())
+        let msg = request(
+            op.unwrap(),
+            key.unwrap().to_owned().into_bytes(),
+            Some(payload(i, buf.to_owned())),
+        );
+        messages.push(msg)
     }
 
     core.run(client.and_then(move |client| {

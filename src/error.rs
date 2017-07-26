@@ -7,6 +7,7 @@ use std::io;
 pub enum ErrorKind {
     InvalidData,
     UnknownOp,
+    BadMessage,
     Other,
 }
 
@@ -15,7 +16,8 @@ impl fmt::Display for ErrorKind {
         let s = match *self {
             ErrorKind::Other => "Other",
             ErrorKind::InvalidData => "InvalidData",
-            ErrorKind::UnknownOp => "Unknown Op"
+            ErrorKind::UnknownOp => "Unknown Op",
+            ErrorKind::BadMessage => "Bad Message"
         };
         write!(f, "{}", s)
     }

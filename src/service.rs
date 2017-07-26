@@ -7,10 +7,10 @@ use tokio_io::AsyncRead;
 
 use tokio_service::{Service, NewService};
 
-use std::{io};
+use std::io;
 use std::net::SocketAddr;
 
-use message::{Message, MessageBuilder, Op, Code};
+use message::{self, Message, Op, Code};
 use cache;
 use codec::CacheCodec;
 use std::sync::Arc;
@@ -103,13 +103,10 @@ impl<T> Service for StatService<T>
     fn call(&self, req: Self::Request) -> Self::Future {
         match req.op() {
             Op::Stats => {
-                let payload = self.stats.get_stats();
-                let mut mb = MessageBuilder::default();
-                {
-                    mb.set_op(Op::Stats).set_payload(payload.into_bytes())
-                        .set_type_id(1).set_code(Code::Ok);
-                }
-                Box::new(future::done(mb.into_response()).from_err())
+                let data = self.stats.get_stats();
+                let msg = message::response(Op::Stats, Code::Ok,
+                                            Some(message::payload(1, data.into_bytes())));
+                Box::new(future::ok(msg))
             }
             _ => {
                 let stats = self.stats.clone();

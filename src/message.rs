@@ -8,7 +8,16 @@ pub enum Message {
     Response(Op, Code, Option<Payload>),
 }
 
+pub fn request(op: Op, key: Vec<u8>, payload: Option<Payload>) -> Message {
+    Message::Request(op, key, payload)
+}
+
+pub fn response(op: Op, code: Code, payload: Option<Payload>) -> Message {
+    Message::Response(op, code, payload)
+}
+
 impl Message {
+
     pub fn key(&self) -> Option<&[u8]> {
         match *self {
             Message::Request(_, ref key, _) => Some(key.as_slice()),
@@ -43,167 +52,11 @@ impl Message {
         }
     }
 
-    pub fn consume(self) -> (Option<Vec<u8>>, Option<Payload>) {
+    pub fn consume_request(self) -> Result<(Vec<u8>, Option<Payload>), error::Error> {
         match self {
-            Message::Request(_, key, payload) => (Some(key), payload),
-            Message::Response(_, _, payload) => (None, payload),
+            Message::Request(_, key, payload) => Ok((key, payload)),
+            Message::Response(..) => Err(error::Error::new(error::ErrorKind::BadMessage, "expected a request, got a response"))
         }
-    }
-}
-
-/// `MessageBuilder`
-#[derive(Debug, PartialEq, Clone, Default)]
-pub struct MessageBuilder {
-    op: Option<Op>,
-    key: Option<Vec<u8>>,
-    type_id: Option<u32>,
-    payload: Option<Vec<u8>>,
-    code: Option<Code>,
-}
-
-impl MessageBuilder {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn set_op(&mut self, op: Op) -> &mut Self {
-        self.op = Some(op);
-        self
-    }
-
-    pub fn set_key(&mut self, key: Vec<u8>) -> &mut Self {
-        if !key.is_empty() {
-            self.key = Some(key);
-        } else {
-            self.key = None;
-        }
-        self
-    }
-
-    pub fn set_payload(&mut self, payload: Vec<u8>) -> &mut Self {
-        if payload.is_empty() {
-            self.payload = None;
-        } else {
-            self.payload = Some(payload);
-        }
-        self
-    }
-
-    pub fn set_type_id(&mut self, type_id: u32) -> &mut Self {
-        self.type_id = Some(type_id);
-        self
-    }
-
-    pub fn set_code(&mut self, code: Code) -> &mut Self {
-        self.code = Some(code);
-        self
-    }
-
-    pub fn into_request(self) -> Result<Message, error::Error> {
-        let payload = if let Some(payload) = self.payload {
-            if let Some(type_id) = self.type_id {
-                Some(Payload {
-                    type_id: type_id,
-                    data: payload,
-                })
-            } else {
-                return Err(error::Error::new(error::ErrorKind::InvalidData, "no type_id set"));
-            }
-        } else {
-            None
-        };
-
-        let op = self.op.ok_or_else(|| {
-            error::Error::new(error::ErrorKind::InvalidData, "no op set")
-        })?;
-        let key = self.key.ok_or_else(|| {
-            error::Error::new(error::ErrorKind::InvalidData, "no key set")
-        })?;
-        Ok(Message::Request(op, key, payload))
-    }
-
-    pub fn into_response(self) -> Result<Message, error::Error> {
-        let payload = if let Some(payload) = self.payload {
-            if let Some(type_id) = self.type_id {
-                Some(Payload {
-                    type_id: type_id,
-                    data: payload,
-                })
-            } else {
-                return Err(error::Error::new(
-                    error::ErrorKind::InvalidData,
-                    "payload given but no type_id set",
-                ));
-            }
-        } else {
-            None
-        };
-        let op = self.op.ok_or_else(|| {
-            error::Error::new(error::ErrorKind::InvalidData, "no op set")
-        })?;
-        let code = self.code.ok_or_else(|| {
-            error::Error::new(error::ErrorKind::InvalidData, "no code set")
-        })?;
-        Ok(Message::Response(op, code, payload))
-    }
-
-    pub fn request(&self) -> Result<Message, error::Error> {
-        let payload = if let Some(payload) = self.payload.clone() {
-            if let Some(type_id) = self.type_id {
-                Some(Payload {
-                    type_id: type_id,
-                    data: payload,
-                })
-            } else {
-                return Err(error::Error::new(
-                    error::ErrorKind::InvalidData,
-                    "payload given but no type_id set",
-                ));
-            }
-        } else {
-            None
-        };
-
-        let op = self.op.ok_or_else(|| {
-            error::Error::new(error::ErrorKind::InvalidData, "no op set")
-        })?;
-        let key = self.key.clone().ok_or_else(|| {
-            error::Error::new(error::ErrorKind::InvalidData, "no key set")
-        })?;
-        Ok(Message::Request(
-            op,
-            key,
-            payload
-        ))
-    }
-
-    pub fn response(&self) -> Result<Message, error::Error> {
-        let payload = if let Some(payload) = self.payload.clone() {
-            if let Some(type_id) = self.type_id {
-                Some(Payload {
-                    type_id: type_id,
-                    data: payload,
-                })
-            } else {
-                return Err(error::Error::new(
-                    error::ErrorKind::InvalidData,
-                    "payload given but no type_id set",
-                ));
-            }
-        } else {
-            None
-        };
-        let op = self.op.ok_or_else(|| {
-            error::Error::new(error::ErrorKind::InvalidData, "no op set")
-        })?;
-        let code = self.code.ok_or_else(|| {
-            error::Error::new(error::ErrorKind::InvalidData, "no code set")
-        })?;
-        Ok(Message::Response(
-            op,
-            code,
-            payload
-        ))
     }
 }
 
@@ -225,6 +78,11 @@ impl From<Payload> for (u32, Vec<u8>) {
         (payload.type_id, payload.data)
     }
 }
+
+pub fn payload(type_id: u32, data: Vec<u8>) -> Payload {
+    Payload{type_id: type_id, data: data}
+}
+
 /// `Op`
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Op {

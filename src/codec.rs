@@ -3,7 +3,8 @@ use tokio_proto::multiplex::RequestId;
 use std::io;
 use std::convert::TryFrom;
 use bytes::{Buf, BufMut, BigEndian, BytesMut};
-use message::{Message, MessageBuilder, Op, Code};
+use message::{self, Message, Op, Code};
+
 
 static HEADER_LEN: usize = 8 + 1 + 1 + 8 + 4;
 /// +-- request id ------+- code ---------+----op --+--- payload len ---+---- key len ---
@@ -33,7 +34,11 @@ impl Encoder for CacheCodec {
         let payload = msg.payload().map(|p| p.data()).unwrap_or_else(|| &[]);
         // TODO: return Err if payload is given but no type id
         let type_id = msg.type_id().unwrap_or(0 as u32);
-        let payload_len = if payload.is_empty() { 0 } else { payload.len() + 4 };
+        let payload_len = if payload.is_empty() {
+            0
+        } else {
+            payload.len() + 4
+        };
         let min_size = HEADER_LEN + key.len() + payload_len;
         buf.reserve(min_size);
         buf.put_u64::<BigEndian>(request_id as u64);
@@ -68,44 +73,39 @@ impl Decoder for CacheCodec {
 
         let payload_len = if payload_len > 0 { payload_len + 4 } else { 0 };
 
-        let message_len = HEADER_LEN + payload_len + key_len;
+        let msg_len = HEADER_LEN + payload_len + key_len;
         // buffer not ready
-        if (buf.len()) < message_len {
+        if (buf.len()) < msg_len {
             return Ok(None);
         }
 
-        let message = buf.split_to(message_len);
+        let msg = buf.split_to(msg_len);
+        let request_id = io::Cursor::new(&msg[0..8]).get_u64::<BigEndian>();
+        let code = io::Cursor::new(&msg[8..9]).get_u8();
+        let op = io::Cursor::new(&msg[9..10]).get_u8();
 
-        let request_id = io::Cursor::new(&message[0..8]).get_u64::<BigEndian>();
-        let code = io::Cursor::new(&message[8..9]).get_u8();
-        let op = io::Cursor::new(&message[9..10]).get_u8();
-
-        let key = &message[HEADER_LEN..HEADER_LEN + key_len];
+        let key = &msg[HEADER_LEN..HEADER_LEN + key_len];
         let type_id = if payload_len > 0 {
-            io::Cursor::new(&message[HEADER_LEN + key_len..HEADER_LEN + key_len + 4]).get_u32::<BigEndian>()
+            io::Cursor::new(&msg[HEADER_LEN + key_len..HEADER_LEN + key_len + 4])
+                .get_u32::<BigEndian>()
         } else {
             0
         };
-        let data = if payload_len > 0 {
-            &message[HEADER_LEN + key_len + 4..HEADER_LEN + key_len + payload_len]
+
+        let payload = if payload_len > 0 {
+            let data = &msg[HEADER_LEN + key_len + 4..HEADER_LEN + key_len + payload_len];
+            Some(message::payload(type_id, data.to_owned()))
         } else {
-            &[]
+            None
         };
 
-        let mut msg = MessageBuilder::new();
-        {
-            msg.set_op(Op::try_from(op)?)
-                .set_key(key.to_owned())
-                .set_type_id(type_id)
-                .set_payload(data.to_owned())
-                .set_code(Code::try_from(code)?);
-        }
-
-        if code == 0 {
-            Ok(Some((request_id as RequestId, msg.into_request()?)))
+        let msg = if code == 0 {
+            message::request(Op::try_from(op)?, key.to_owned(), payload)
         } else {
-            Ok(Some((request_id as RequestId, msg.into_response()?)))
-        }
+            message::response(Op::try_from(op)?, Code::try_from(code)?, payload)
+        };
+
+        Ok(Some((request_id as RequestId, msg)))
     }
 }
 
@@ -113,7 +113,6 @@ impl Decoder for CacheCodec {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use message::Payload;
     use message::Op;
 
     #[test]
@@ -129,20 +128,16 @@ mod tests {
 
     #[test]
     fn test_request() {
-        let msg = MessageBuilder::new()
-            .set_op(Op::Get)
-            .set_key("foo".into())
-            .set_type_id(3)
-            .set_payload("123091823".into())
-            .request()
-            .unwrap();
-
-
+        let msg = message::request(
+            Op::Get,
+            "foo".into(),
+            Some(message::payload(3, "123124125".into())),
+        );
         let req_id = 123 as RequestId;
         let mut buf = BytesMut::new();
         let mut codec = CacheCodec;
 
-        codec.encode((req_id, msg.clone()), &mut buf);
+        codec.encode((req_id, msg.clone()), &mut buf).unwrap();
         let (decoded_req, decoded_message) = codec.decode(&mut buf).unwrap().unwrap();
 
         assert_eq!(decoded_req, req_id);
@@ -151,20 +146,16 @@ mod tests {
 
     #[test]
     fn test_response() {
-        let msg = MessageBuilder::new()
-            .set_op(Op::Get)
-            .set_code(Code::Ok)
-            .set_type_id(3)
-            .set_payload("123091823".into())
-            .response()
-            .unwrap();
-
-
+        let msg = message::response(
+            Op::Get,
+            Code::Ok,
+            Some(message::payload(3, "123124125".into())),
+        );
         let req_id = 123 as RequestId;
         let mut buf = BytesMut::new();
         let mut codec = CacheCodec;
 
-        codec.encode((req_id, msg.clone()), &mut buf);
+        codec.encode((req_id, msg.clone()), &mut buf).unwrap();
         let (decoded_req, decoded_message) = codec.decode(&mut buf).unwrap().unwrap();
 
         assert_eq!(decoded_req, req_id);
@@ -173,25 +164,19 @@ mod tests {
 
     #[test]
     fn test_request_no_payload() {
-        let msg = MessageBuilder::new()
-            .set_op(Op::Get)
-            .set_key("foo".into())
-            .request()
-            .unwrap();
-
-
+        let msg = message::request(Op::Get, "foo".into(), None);
         let req_id = 123 as RequestId;
         let mut buf = BytesMut::new();
         let mut codec = CacheCodec;
 
-        codec.encode((req_id, msg.clone()), &mut buf);
+        codec.encode((req_id, msg.clone()), &mut buf).unwrap();
         println!("encoded: {:?}", buf);
         let (decoded_req, decoded_message) = codec.decode(&mut buf).unwrap().unwrap();
 
         assert_eq!(decoded_req, req_id);
         assert_eq!(decoded_message, msg);
     }
-        #[test]
+    #[test]
     fn test_response_no_payload() {
         let msg = Message::Response(Op::Set, Code::Ok, None);
 
@@ -200,7 +185,7 @@ mod tests {
         let mut buf = BytesMut::new();
         let mut codec = CacheCodec;
 
-        codec.encode((req_id, msg.clone()), &mut buf);
+        codec.encode((req_id, msg.clone()), &mut buf).unwrap();
         println!("encoded: {:?}", buf);
         let (decoded_req, decoded_message) = codec.decode(&mut buf).unwrap().unwrap();
 

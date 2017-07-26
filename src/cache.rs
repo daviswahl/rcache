@@ -1,4 +1,4 @@
-use message::{Message, MessageBuilder, Op, Code};
+use message::{self, Message, Op, Code};
 use tokio_core::reactor::Core;
 use std::error::Error;
 use futures::sync::oneshot::Sender;
@@ -20,11 +20,11 @@ pub struct Cache {
 }
 
 impl Cache {
-    pub fn new() -> Result<Self, io::Error> {
+    pub fn new(capacity: usize) -> Result<Self, io::Error> {
         Ok(Cache {
             pool: CpuPool::new_num_cpus(),
             core: Core::new()?,
-            store: Arc::new(Mutex::new(LruCache::new(40000))),
+            store: Arc::new(Mutex::new(LruCache::new(capacity))),
         })
     }
 }
@@ -53,41 +53,32 @@ impl Cache {
 
 fn handle(store: Store, message: Message) -> Result<Message, error::Error> {
     let op = message.op();
-    let (key, payload) = message.consume();
-    let mut builder = MessageBuilder::default();
-    {
-        builder.set_op(op);
-    }
+    let (key, data) = message.consume_request()?;
 
-    match op {
+    let response = match op {
         Op::Set => {
-            let key = key.ok_or_else(|| "no key given to set op")?;
-            let payload = payload.ok_or_else(|| "no payload given to set op")?;
+            let key = key;
+            let data = data.ok_or_else(|| "no payload given to set op")?;
 
-            store.lock()
-                .map(|mut store| { store.insert(key, payload.into()); })
+            store
+                .lock()
+                .map(|mut store| { store.insert(key, data.into()); })
                 .map_err(|e| {
                     error::Error::new(error::ErrorKind::Other, e.description())
                 })?;
 
-            builder.set_code(Code::Ok);
+            message::response(Op::Set, Code::Ok, None)
         }
 
         Op::Get => {
-            let key = key.ok_or_else(|| "no key given to get op")?;
             store
                 .lock()
                 .map(|mut store| if let Some(&mut (ref type_id, ref data)) =
                     store.get_mut(key.as_slice())
                 {
-                    builder
-                        .set_type_id(*type_id)
-                        .set_payload(data.clone())
-                        .set_code(Code::Ok);
+                    message::response(Op::Get, Code::Ok, Some(message::payload(*type_id, data.clone())))
                 } else {
-                    builder
-                        .set_op(Op::Get)
-                        .set_code(Code::Miss);
+                  message::response(Op::Get, Code::Miss, None)
                 })
                 .map_err(|e| {
                     error::Error::new(error::ErrorKind::Other, e.description())
@@ -96,20 +87,20 @@ fn handle(store: Store, message: Message) -> Result<Message, error::Error> {
 
         Op::Del => {
             // Probably never going to do this
-            builder.set_code(Code::Ok);
+            message::response(Op::Del, Code::Ok, None)
         }
         Op::Stats => {
-            builder.set_code(Code::Ok);
+            unreachable!();
         }
-    }
-    builder.into_response()
+    };
+
+    Ok(response)
 }
 
 fn handle_error(err: &error::Error) -> Message {
-    MessageBuilder::default()
-        .set_op(Op::Get)
-        .set_code(Code::Error)
-        .set_payload(err.description().to_owned().into_bytes())
-        .response()
-        .unwrap()
+    message::response(
+        Op::Get,
+        Code::Error,
+        Some(message::payload(0, err.description().to_owned().into_bytes())),
+    )
 }
