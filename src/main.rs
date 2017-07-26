@@ -14,9 +14,8 @@ use rcache::cache;
 use rcache::message::{MessageBuilder, Op};
 use futures::Future;
 use std::sync::Arc;
-use futures_cpupool::CpuPool;
 use tokio_core::reactor::Core;
-use tokio_service::{Service, NewService};
+use tokio_service::Service;
 use std::thread;
 use rand::Rng;
 use rcache::stats::Stats;
@@ -27,15 +26,15 @@ fn main() {
         match arg.as_str() {
             "server" => do_server(),
             "client3" => do_client2(),
-            "client2" => do_client(1),
+            "client2" => do_client(),
             "client" => {
                 let start = time::now();
                 let mut children = vec![];
-                for i in 0..100 {
-                    children.push(thread::spawn(move || { do_client(i); }));
+                for _ in 0..100 {
+                    children.push(thread::spawn(move || { do_client(); }));
                 }
                 while let Some(child) = children.pop() {
-                    child.join();
+                    child.join().unwrap();
                 }
 
                 let delta = time::now() - start;
@@ -45,7 +44,7 @@ fn main() {
                 let mut core = Core::new().unwrap();
                 let client =
                     client::Client::connect(&"127.0.0.1:12345".parse().unwrap(), &core.handle());
-                let mut msg = MessageBuilder::new()
+                let msg = MessageBuilder::default()
                     .set_op(Op::Stats)
                     .set_key("foo".into())
                     .request()
@@ -59,7 +58,7 @@ fn main() {
                         Ok(())
                     })
                 });
-                core.run(req);
+                core.run(req).unwrap();
             }
             _ => (),
         }
@@ -70,7 +69,7 @@ fn do_server() {
     service::serve(
         "127.0.0.1:12345".parse().unwrap(),
         service::StatService {
-            stats: Arc::new(Stats::new()),
+            stats: Arc::new(Stats::default()),
             inner: {
                 service::LogService {
                     inner: service::CacheService { cache: Arc::new(cache::Cache::new().unwrap()) },
@@ -110,7 +109,7 @@ fn do_client2() {
         })).unwrap();
     }
 }
-fn do_client(i: u32) {
+fn do_client() {
     let mut core = Core::new().unwrap();
 
     let client = client::Client::connect(&"127.0.0.1:12345".parse().unwrap(), &core.handle());
@@ -119,7 +118,7 @@ fn do_client(i: u32) {
 
     for i in 0..500 {
         let mut rng = rand::thread_rng();
-        let op = rng.choose(&[Op::Get, Op::Del, Op::Set]).map(|&x| x);
+        let op = rng.choose(&[Op::Get, Op::Del, Op::Set]).cloned();
 
         let key = rng.choose(
             &[

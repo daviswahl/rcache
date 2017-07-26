@@ -6,13 +6,16 @@ use std::io;
 #[derive(Debug)]
 pub enum ErrorKind {
     InvalidData,
+    UnknownOp,
     Other,
 }
 
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let s = match self {
-            Other => "Other"
+        let s = match *self {
+            ErrorKind::Other => "Other",
+            ErrorKind::InvalidData => "InvalidData",
+            ErrorKind::UnknownOp => "Unknown Op"
         };
         write!(f, "{}", s)
     }

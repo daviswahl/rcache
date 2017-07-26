@@ -1,4 +1,4 @@
-use futures::{stream, future, Future, Stream, Sink, IntoFuture};
+use futures::{future, Future, Stream, Sink};
 
 use tokio_core::reactor::Core;
 use tokio_core::net::TcpListener;
@@ -7,14 +7,12 @@ use tokio_io::AsyncRead;
 
 use tokio_service::{Service, NewService};
 
-use std::{io, str};
+use std::{io};
 use std::net::SocketAddr;
 
 use message::{Message, MessageBuilder, Op, Code};
 use cache;
 use codec::CacheCodec;
-use futures_cpupool::CpuPool;
-use std::thread;
 use std::sync::Arc;
 use std::error::Error;
 use futures::sync::oneshot;

@@ -3,6 +3,7 @@
 #![feature(plugin)]
 #![plugin(clippy)]
 
+#![allow(match_same_arms)]
 extern crate capnp;
 extern crate time;
 extern crate capnp_futures;

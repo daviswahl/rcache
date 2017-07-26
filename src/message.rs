@@ -1,6 +1,5 @@
 use std::convert::TryFrom;
 use error;
-use std::io;
 
 /// `Message`
 #[derive(Debug, PartialEq, Clone)]
@@ -11,43 +10,43 @@ pub enum Message {
 
 impl Message {
     pub fn key(&self) -> Option<&[u8]> {
-        match self {
-            &Message::Request(_, ref key, _) => Some(key.as_slice()),
-            &Message::Response(..) => None,
+        match *self {
+            Message::Request(_, ref key, _) => Some(key.as_slice()),
+            Message::Response(..) => None,
         }
     }
 
     pub fn op(&self) -> Op {
-        match self {
-            &Message::Request(op, ..) => op,
-            &Message::Response(op, ..) => op,
+        match *self {
+            Message::Request(op, ..) |
+            Message::Response(op, ..) => op,
         }
     }
 
     pub fn code(&self) -> Code {
-        match self {
-            &Message::Request(..) => Code::Req,
-            &Message::Response(_, code, ..) => code,
+        match *self {
+            Message::Request(..) => Code::Req,
+            Message::Response(_, code, ..) => code,
         }
     }
     pub fn type_id(&self) -> Option<u32> {
-        match self {
-            &Message::Request(_, _, ref payload) => payload.as_ref().map(|p| p.type_id),
-            &Message::Response(_, _, ref payload) => payload.as_ref().map(|p| p.type_id),
+        match *self {
+            Message::Request(_, _, ref payload) => payload.as_ref().map(|p| p.type_id),
+            Message::Response(_, _, ref payload) => payload.as_ref().map(|p| p.type_id),
         }
     }
 
     pub fn payload(&self) -> Option<&Payload> {
-        match self {
-            &Message::Request(_, _, ref payload) => payload.as_ref(),
-            &Message::Response(_, _, ref payload) => payload.as_ref(),
+        match *self {
+            Message::Request(_, _, ref payload)  |
+            Message::Response(_, _, ref payload) => payload.as_ref(),
         }
     }
 
     pub fn consume(self) -> (Option<Vec<u8>>, Option<Payload>) {
         match self {
             Message::Request(_, key, payload) => (Some(key), payload),
-            Message::Response(_, key, payload) => (None, payload),
+            Message::Response(_, _, payload) => (None, payload),
         }
     }
 }
@@ -244,7 +243,7 @@ impl TryFrom<u8> for Op {
             1 => Ok(Op::Get),
             2 => Ok(Op::Del),
             3 => Ok(Op::Stats),
-            _ => Err(error::Error::new(error::ErrorKind::InvalidData, "unknown op")),
+            _ => Err(error::Error::new(error::ErrorKind::UnknownOp, "got an unknown op code")),
         }
     }
 }
@@ -255,6 +254,7 @@ pub enum Code {
     Req = 0,
     Ok = 1,
     Miss = 2,
+    Error = 3,
 }
 
 impl TryFrom<u8> for Code {
@@ -265,6 +265,7 @@ impl TryFrom<u8> for Code {
             0 => Ok(Code::Req),
             1 => Ok(Code::Ok),
             2 => Ok(Code::Miss),
+            3 => Ok(Code::Error),
             _ => Err(error::Error::new(error::ErrorKind::InvalidData, "unknown code")),
         }
     }

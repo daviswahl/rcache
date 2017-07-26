@@ -1,14 +1,11 @@
 use message::{Message, MessageBuilder, Op, Code};
-use tokio_core::reactor::{Core, Remote};
+use tokio_core::reactor::Core;
 use std::error::Error;
 use futures::sync::oneshot::Sender;
 use futures_cpupool::CpuPool;
-use std::thread;
 use std::sync::{Arc, RwLock};
 use std::collections::HashMap;
-use futures::{Future, future, BoxFuture};
-use rand::{self, Rng};
-use std::time::Duration;
+use futures::future;
 use std::io;
 use error;
 
@@ -36,7 +33,7 @@ impl Cache {
         let work = || {
             let response = match handle(store, message) {
                 Ok(msg) => msg,
-                Err(err) => handle_error(err),
+                Err(err) => handle_error(&err),
             };
 
             match snd.send(response) {
@@ -107,10 +104,11 @@ fn handle(store: Store, message: Message) -> Result<Message, error::Error> {
     builder.into_response()
 }
 
-fn handle_error(err: error::Error) -> Message {
+fn handle_error(err: &error::Error) -> Message {
     MessageBuilder::default()
-        .set_op(Op::Stats)
-        .set_code(Code::Miss)
+        .set_op(Op::Get)
+        .set_code(Code::Error)
+        .set_payload(err.description().to_owned().into_bytes())
         .response()
         .unwrap()
 }

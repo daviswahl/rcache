@@ -1,23 +1,13 @@
 use std::sync::{Arc, atomic};
 /// `Stats` middleware
 ///
+#[derive(Default)]
 pub struct Stats {
     total_requests: Arc<atomic::AtomicUsize>,
     total_request_time: Arc<atomic::AtomicUsize>,
-    min_request_time: Arc<atomic::AtomicUsize>,
-    max_request_time: Arc<atomic::AtomicUsize>
 }
 
 impl Stats {
-    pub fn new() -> Self {
-        Self {
-            total_requests: Arc::new(atomic::AtomicUsize::new(0)),
-            total_request_time: Arc::new(atomic::AtomicUsize::new(0)),
-            min_request_time: Arc::new(atomic::AtomicUsize::new(0)),
-            max_request_time: Arc::new(atomic::AtomicUsize::new(0)),
-        }
-    }
-
     pub fn incr_total_requests(&self) {
         self.total_requests.fetch_add(1, atomic::Ordering::SeqCst);
     }
