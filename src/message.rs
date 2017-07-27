@@ -73,6 +73,9 @@ impl Payload {
     pub fn data(&self) -> &[u8] {
         self.data.as_slice()
     }
+    pub fn type_id(&self) -> u32 {
+        self.type_id
+    }
 }
 
 pub fn payload(type_id: u32, data: Vec<u8>) -> Payload {

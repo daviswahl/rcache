@@ -68,7 +68,7 @@ fn do_server() {
             inner: {
                 service::LogService {
                     inner: service::CacheService {
-                        cache: Arc::new(cache::Cache::new(40000).unwrap()),
+                        cache: Arc::new(cache::Cache::new(2000000).unwrap()),
                     },
                 }
             },

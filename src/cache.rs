@@ -90,7 +90,14 @@ fn handle(store: Store, message: Message) -> Result<Message, error::Error> {
             message::response(Op::Del, Code::Ok, None)
         }
         Op::Stats => {
-            unreachable!();
+            store
+                .lock()
+                .map(|store| {
+                    message::response(Op::Stats, Code::Ok, Some(message::payload(store.len() as u32, vec![])))
+                })
+                .map_err(|e| {
+                    error::Error::new(error::ErrorKind::Other, e.description())
+                })?
         }
     };
 

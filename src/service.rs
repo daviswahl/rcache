@@ -104,9 +104,13 @@ impl<T> Service for StatService<T>
         match req.op() {
             Op::Stats => {
                 let data = self.stats.get_stats();
-                let msg = message::response(Op::Stats, Code::Ok,
-                                            Some(message::payload(1, data.into_bytes())));
-                Box::new(future::ok(msg))
+                Box::new(self.inner.call(req).map(|resp| match resp {
+                    message::Message::Response(_, _, Some(payload)) => {
+                        let len = payload.type_id();
+                        message::response(Op::Stats, Code::Ok, Some(message::payload(1, format!("keys: {}, {:?}", len, data).into_bytes())))
+                    }
+                    _ => message::response(Op::Stats, Code::Ok, Some(message::payload(1, data.into_bytes())))
+                }))
             }
             _ => {
                 let stats = self.stats.clone();
