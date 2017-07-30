@@ -22,9 +22,15 @@ impl Stats {
     pub fn get_stats(&self) -> String {
         let total_requests = self.total_requests.load(atomic::Ordering::SeqCst);
         let total_requests_time = self.total_request_time.load(atomic::Ordering::SeqCst);
-        let avg_request_time = total_requests_time / total_requests;
+
+        let avg_request_time = if total_requests > 0 {
+            total_requests_time / total_requests
+        } else {
+            0
+        };
+
         format!(
-            "total_requests: {}, total_request_time: {}μs, avg_request_time: {}μs",
+            "total_requests: {}, total_request_time: {} μs, avg_request_time: {} μs",
             total_requests,
             total_requests_time,
             avg_request_time
