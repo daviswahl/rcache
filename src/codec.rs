@@ -74,16 +74,19 @@ impl Decoder for CacheCodec {
         let type_id_len = if payload_len == 0 { 0 } else { 4 };
 
         let msg_len = HEADER_LEN + payload_len + key_len + type_id_len;
-        // buffer not ready
+
+        // Buffer not ready.
         if (buf.len()) < msg_len {
             return Ok(None);
         }
 
         // Split off the complete message.
         let msg = buf.split_to(msg_len);
+
         // Instantiate the cursor.
         let mut cursor = io::Cursor::new(msg);
 
+        // Read the first 3 fields.
         let request_id = cursor.get_u64::<BigEndian>();
         let code = cursor.get_u8();
         let op = cursor.get_u8();
@@ -96,13 +99,9 @@ impl Decoder for CacheCodec {
         key.resize(key_len, 0);
         cursor.copy_to_slice(&mut key);
 
-        let type_id = if payload_len > 0 {
-            cursor.get_u32::<BigEndian>()
-        } else {
-            0
-        };
-
+        // Read the payload.
         let payload = if payload_len > 0 {
+            let type_id = cursor.get_u32::<BigEndian>();
             Some(message::payload(type_id, cursor.collect()))
         } else {
             None
@@ -185,6 +184,7 @@ mod tests {
         assert_eq!(decoded_req, req_id);
         assert_eq!(decoded_message, msg);
     }
+
     #[test]
     fn test_response_no_payload() {
         let msg = Message::Response(Op::Set, Code::Ok, None);
@@ -202,6 +202,7 @@ mod tests {
     }
 
     #[bench]
+    #[allow(unused_must_use)]
     fn bench_encoding(b: &mut Bencher) {
         let msg = message::response(
             Op::Get,
@@ -213,7 +214,7 @@ mod tests {
 
         b.iter(|| {
             let mut buf = BytesMut::new();
-            codec.encode((req_id, msg.clone()), &mut buf).unwrap();
+            codec.encode((req_id, msg.clone()), &mut buf);
         });
     }
 
