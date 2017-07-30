@@ -93,7 +93,11 @@ fn handle(store: Store, message: Message) -> Result<Message, error::Error> {
             store
                 .lock()
                 .map(|store| {
-                    message::response(Op::Stats, Code::Ok, Some(message::payload(store.len() as u32, vec![])))
+                    message::response(
+                        Op::Stats,
+                        Code::Ok,
+                        Some(message::payload(store.len() as u32, vec![])),
+                    )
                 })
                 .map_err(|e| {
                     error::Error::new(error::ErrorKind::Other, e.description())

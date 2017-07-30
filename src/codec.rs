@@ -33,11 +33,7 @@ impl Encoder for CacheCodec {
         let payload = msg.payload().map(|p| p.data()).unwrap_or_else(|| &[]);
         let type_id = msg.type_id().unwrap_or(0 as u32);
 
-        let type_id_len = if payload.is_empty() {
-            0
-        } else {
-            4
-        };
+        let type_id_len = if payload.is_empty() { 0 } else { 4 };
 
         let payload_len = payload.len();
 
@@ -65,26 +61,29 @@ impl Decoder for CacheCodec {
     type Error = io::Error;
 
     fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<(RequestId, Message)>, io::Error> {
-        // Check that the header is complete
+        // Check that at least the header is complete
         if buf.len() < HEADER_LEN {
             return Ok(None);
         }
 
-        // TODO: wrapping each slice in a Cursor just to get access to the .get_* methods
-        // seems like a lot of overhead, but I could be wrong.
+        // TODO: Only instantiate the cursor once?
         let payload_len = io::Cursor::new(&buf.as_ref()[10..18]).get_u64::<BigEndian>() as usize;
         let key_len = io::Cursor::new(&buf.as_ref()[18..22]).get_u32::<BigEndian>() as usize;
 
-        let payload_len = if payload_len > 0 { payload_len + 4 } else { 0 };
+        // If we have a payload, then we have a type_id to include in the total message length.
+        let type_id_len = if payload_len == 0 { 0 } else { 4 };
 
-        let msg_len = HEADER_LEN + payload_len + key_len;
+        let msg_len = HEADER_LEN + payload_len + key_len + type_id_len;
         // buffer not ready
         if (buf.len()) < msg_len {
             return Ok(None);
         }
 
+        // Split off the complete message.
         let msg = buf.split_to(msg_len);
+        // Instantiate the cursor.
         let mut cursor = io::Cursor::new(msg);
+
         let request_id = cursor.get_u64::<BigEndian>();
         let code = cursor.get_u8();
         let op = cursor.get_u8();
@@ -92,12 +91,16 @@ impl Decoder for CacheCodec {
         // Skip the payload_len and key_len as they've been read already.
         cursor.advance(12);
 
-        // read the key
+        // Read the key.
         let mut key = Vec::with_capacity(key_len);
         key.resize(key_len, 0);
         cursor.copy_to_slice(&mut key);
 
-        let type_id = if payload_len > 0 { cursor.get_u32::<BigEndian>() } else { 0 };
+        let type_id = if payload_len > 0 {
+            cursor.get_u32::<BigEndian>()
+        } else {
+            0
+        };
 
         let payload = if payload_len > 0 {
             Some(message::payload(type_id, cursor.collect()))
@@ -210,7 +213,7 @@ mod tests {
 
         b.iter(|| {
             let mut buf = BytesMut::new();
-            codec.encode((req_id, msg.clone()), &mut buf);
+            codec.encode((req_id, msg.clone()), &mut buf).unwrap();
         });
     }
 
@@ -226,8 +229,6 @@ mod tests {
         let mut buf = BytesMut::new();
         codec.encode((req_id, msg.clone()), &mut buf).unwrap();
 
-        b.iter(|| {
-            codec.decode(&mut buf.clone())
-        });
+        b.iter(|| codec.decode(&mut buf.clone()));
     }
 }

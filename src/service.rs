@@ -1,4 +1,4 @@
-use futures::{future, Future, Stream, Sink};
+use futures::{Future, Stream, Sink};
 
 use tokio_core::reactor::Core;
 use tokio_core::net::TcpListener;
