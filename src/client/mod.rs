@@ -1,7 +1,7 @@
 
 use futures::Future;
 use tokio_core::net::TcpStream;
-use tokio_core::reactor::{Core, Handle};
+use tokio_core::reactor::Handle;
 use tokio_proto::TcpClient;
 use tokio_proto::multiplex::ClientService;
 use tokio_service::Service;
@@ -10,7 +10,7 @@ use std::io;
 
 use proto::CacheProto;
 use service;
-use message::{self, Message, Op, Payload};
+use message::{self, Message, Op};
 
 /// `Client`
 pub struct Client {

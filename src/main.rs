@@ -14,7 +14,7 @@ use rcache::service;
 use rcache::cache;
 use std::error::Error;
 use std::net::SocketAddr;
-use rcache::message::{self, Message, Payload, request, payload, Op, Code};
+use rcache::message::{Message, Op, Code};
 use futures::Future;
 use std::sync::Arc;
 use tokio_core::reactor::Core;
@@ -63,13 +63,13 @@ fn main() {
         .subcommand(server)
         .get_matches();
 
-    match run(matches) {
+    match run(&matches) {
         Ok(result) => println!("{}", result),
         Err(err) => println!("err: {}", err),
     }
 }
 
-fn run(matches: ArgMatches) -> Result<String, String> {
+fn run(matches: &ArgMatches) -> Result<String, String> {
     let addr: SocketAddr = matches
         .value_of("Socket Address")
         .unwrap() // Safe to unwrap because clap has validated that the addr is present
@@ -81,7 +81,6 @@ fn run(matches: ArgMatches) -> Result<String, String> {
             .value_of("cache_size")
             .map(|s| s.parse().unwrap_or_else(|_| DEFAULT_CACHE_SIZE))
             .unwrap_or_else(|| DEFAULT_CACHE_SIZE);
-
         run_server(addr, cache_size).map(|_| "success".to_owned())
     } else if let Some(matches) = matches.subcommand_matches("client") {
         run_client(addr, matches)
@@ -110,9 +109,7 @@ fn run_client(addr: SocketAddr, matches: &ArgMatches) -> Result<String, String> 
     };
 
 
-    let exec = client.and_then(|client| client_cmd(client)).map(
-        handle_response,
-    );
+    let exec = client.and_then(client_cmd).map(|msg| handle_response(&msg));
 
     // TODO: Don't want to unwrap here, should propagate error to top level
     core.run(exec).expect("core failure")
@@ -131,20 +128,20 @@ fn run_server(addr: SocketAddr, cache_size: usize) -> Result<(), String> {
 }
 
 // Decode utf-8 strings if the message type_id is 1, otherwise just defer to builtin formatter
-fn handle_response(msg: Message) -> Result<String, String> {
+fn handle_response(msg: &Message) -> Result<String, String> {
     match (msg.op(), msg.code(), msg.payload()) {
         // Get
-        (Op::Get, Code::Hit, Some(ref payload)) => {
+        (Op::Get, Code::Hit, Some(payload)) => {
             // Payload is a utf8 encoded string
             if payload.type_id() == 1 {
                 String::from_utf8(payload.data().to_owned()).map_err(|_| {
-                    format!("expected a utf8-encoded string")
+                    "expected a utf8-encoded string".to_owned()
                 })
             } else {
                 Ok(format!("{}", msg))
             }
         }
-        (Op::Stats, _, Some(ref payload)) => {
+        (Op::Stats, _, Some(payload)) => {
             String::from_utf8(payload.data().to_owned()).map_err(|_| {
                 format!("expected a utf8-encoded string")
             })
