@@ -118,6 +118,7 @@ fn run_client(addr: SocketAddr, matches: &ArgMatches) -> Result<String, String> 
 fn run_server(addr: SocketAddr, cache_size: usize) -> Result<(), String> {
     service::serve(
         addr,
+        // TODO: Figure out the idiomatic way to build up these middleware
         service::StatService {
             stats: Arc::new(Stats::default()),
             inner: service::CacheService {
