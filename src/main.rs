@@ -14,6 +14,7 @@ use rcache::service;
 use rcache::cache;
 use std::error::Error;
 use std::net::SocketAddr;
+use tokio_service::Service;
 use rcache::message::{Message, Op, Code};
 use futures::Future;
 use std::sync::Arc;
@@ -92,6 +93,7 @@ fn run(matches: &ArgMatches) -> Result<String, String> {
 fn run_client(addr: SocketAddr, matches: &ArgMatches) -> Result<String, String> {
     let mut core = Core::new().map_err(|e| e.description().to_owned())?;
     let client = client::Client::connect(&addr, &core.handle());
+
     let client_cmd = |client: client::Client| match matches.subcommand() {
         ("GET", Some(matches)) => {
             // handle GET
@@ -149,4 +151,73 @@ fn handle_response(msg: &Message) -> Result<String, String> {
         }
         _ => Ok(format!("{}", msg)),
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test::Bencher;
+    use std::thread;
+    use rand::Rng;
+    use rcache::message::{self, Op, Payload, Code};
+
+    fn build_sets(count: usize) -> Vec<Message> {
+        let mut rng = rand::thread_rng();
+        (0..count)
+            .map(|_| {
+                let mut key = [0; 5];
+                rng.fill_bytes(&mut key);
+                let mut value = [0; 150];
+                rng.fill_bytes(&mut value);
+                message::request(Op::Set, key.to_vec(), Some(message::payload(2, value.to_vec())))
+            })
+            .collect()
+    }
+
+    fn build_gets(count: usize) -> Vec<Message> {
+        let mut rng = rand::thread_rng();
+
+        (0..count)
+            .map(|_| {
+                let mut key = [0; 5];
+                rng.fill_bytes(&mut key);
+                message::request(Op::Get, key.to_vec(), None)
+            })
+            .collect()
+    }
+
+    #[bench]
+    fn bench_gets_full_cache(b: &mut Bencher) {
+        let mut core = Core::new().unwrap();
+        let addr: SocketAddr = "127.0.0.1:12345".parse().unwrap();
+
+        thread::spawn(move || run_server(addr.clone(), 1000));
+        thread::sleep_ms(100);
+
+        // fill cache
+        let sets = build_sets(1000);
+        let handle = core.handle();
+        core.run(client::Client::connect(&addr, &handle).and_then(
+            move |client| {
+                let futs = sets.into_iter().map(move |msg| client.call(msg.clone()));
+                futures::future::join_all(futs)
+            },
+        ));
+
+        let ops = [&build_gets(500)[..], &build_sets(500)[..]].concat();
+        b.iter(|| {
+            let client = client::Client::connect(&addr, &core.handle());
+            let requests = client.and_then(|client| {
+                let futs = ops.iter().map(move |msg| client.call(msg.clone()));
+                futures::future::join_all(futs)
+            });
+            core.run(requests);
+
+            let stats =
+                client::Client::connect(&addr, &core.handle()).and_then(|client| client.stats());
+            println!("{}", handle_response(&core.run(stats).unwrap()).unwrap())
+        })
+
+    }
+
 }
