@@ -1,5 +1,6 @@
 use std::convert::TryFrom;
 use error;
+use std::fmt;
 
 /// `Message`
 #[derive(Debug, PartialEq, Clone)]
@@ -60,6 +61,34 @@ impl Message {
             )),
         }
     }
+    pub fn consume_response(self) -> Result<(Op, Code, Option<Payload>), error::Error> {
+        match self {
+            Message::Response(op, code, payload) => Ok((op, code, payload)),
+            Message::Request(..) => Err(error::Error::new(
+                error::ErrorKind::BadMessage,
+                "expected a request, got a response",
+            )),
+        }
+    }
+}
+
+impl fmt::Display for Message {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Message::Request(ref op, ref key, ref payload) => {
+                match *payload {
+                    Some(ref payload) => write!(f, "Request[Op={}, Key={:?}] {}", op, key, payload.clone()),
+                    None => write!(f, "Request[Op={}, Key={:?}]", op, key),
+                }
+            }
+            Message::Response(ref op, ref code, ref payload) => {
+                match *payload {
+                    Some(ref payload) => write!(f, "Response[Op={}, Code={}] {:?}", op, code, payload.clone()),
+                    None => write!(f, "Request[Op={}, Code={}]", op, code),
+                }
+            }
+        }
+    }
 }
 
 /// `Payload`
@@ -85,6 +114,12 @@ pub fn payload(type_id: u32, data: Vec<u8>) -> Payload {
     }
 }
 
+impl fmt::Display for Payload {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "type_id: {}, data: {:?}", self.type_id, self.data)
+    }
+}
+
 /// `Op`
 #[derive(Debug, PartialEq, Clone, Copy)]
 pub enum Op {
@@ -92,6 +127,19 @@ pub enum Op {
     Get = 1,
     Del = 2,
     Stats = 3,
+}
+
+impl fmt::Display for Op {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match *self {
+            Op::Set => "Set",
+            Op::Get => "Get",
+            Op::Del => "Del",
+            Op::Stats => "Stats",
+        };
+
+        write!(f, "{}", s)
+    }
 }
 
 impl TryFrom<u8> for Op {
@@ -118,6 +166,20 @@ pub enum Code {
     Ok = 1,
     Miss = 2,
     Error = 3,
+    Hit = 4,
+}
+
+impl fmt::Display for Code {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match *self {
+            Code::Req => "Req",
+            Code::Ok => "Ok",
+            Code::Miss => "Miss",
+            Code::Error => "Error",
+            Code::Hit => "Hit",
+        };
+        write!(f, "{}", s)
+    }
 }
 
 impl TryFrom<u8> for Code {
@@ -129,6 +191,7 @@ impl TryFrom<u8> for Code {
             1 => Ok(Code::Ok),
             2 => Ok(Code::Miss),
             3 => Ok(Code::Error),
+            4 => Ok(Code::Hit),
             _ => Err(error::Error::new(
                 error::ErrorKind::InvalidData,
                 "unknown code",

@@ -76,7 +76,7 @@ fn handle(store: Store, message: Message) -> Result<Message, error::Error> {
                 .map(|mut store| if let Some(ref mut payload) =
                     store.get_mut(key.as_slice())
                 {
-                    message::response(Op::Get, Code::Ok, Some(payload.clone()))
+                    message::response(Op::Get, Code::Hit, Some(payload.clone()))
                 } else {
                     message::response(Op::Get, Code::Miss, None)
                 })

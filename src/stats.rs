@@ -12,9 +12,9 @@ impl Stats {
         self.total_requests.fetch_add(1, atomic::Ordering::SeqCst);
     }
 
-    pub fn add_request_time(&self, millis: usize) {
+    pub fn add_request_time(&self, micros: usize) {
         self.total_request_time.fetch_add(
-            millis,
+            micros,
             atomic::Ordering::SeqCst,
         );
     }
@@ -24,7 +24,7 @@ impl Stats {
         let total_requests_time = self.total_request_time.load(atomic::Ordering::SeqCst);
         let avg_request_time = total_requests_time / total_requests;
         format!(
-            "total_requests: {}, total_request_time: {} millis, avg_request_time: {} millis",
+            "total_requests: {}, total_request_time: {}μs, avg_request_time: {}μs",
             total_requests,
             total_requests_time,
             avg_request_time

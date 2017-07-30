@@ -7,104 +7,148 @@ extern crate futures;
 extern crate futures_cpupool;
 extern crate rand;
 extern crate time;
-use std::env;
+extern crate clap;
+
 use rcache::client;
 use rcache::service;
 use rcache::cache;
-use rcache::message::{request, payload, Op};
+use std::error::Error;
+use std::net::SocketAddr;
+use rcache::message::{self, Message, Payload, request, payload, Op, Code};
 use futures::Future;
 use std::sync::Arc;
 use tokio_core::reactor::Core;
-use tokio_service::Service;
-use std::thread;
-use rand::Rng;
 use rcache::stats::Stats;
+use clap::{Arg, App, SubCommand, ArgMatches};
 
+
+static DEFAULT_CACHE_SIZE: usize = 2000000;
 
 fn main() {
-    for arg in env::args().skip(1) {
-        match arg.as_str() {
-            "server" => do_server(),
-            "client2" => do_client(),
-            "client" => {
-                let start = time::now();
-                let mut children = vec![];
-                for _ in 0..100 {
-                    children.push(thread::spawn(move || { do_client(); }));
-                }
-                while let Some(child) = children.pop() {
-                    child.join().unwrap();
-                }
 
-                let delta = time::now() - start;
-                println!("delta: {}", delta.num_milliseconds());
-            }
-            "stats" => {
-                let mut core = Core::new().unwrap();
-                let client =
-                    client::Client::connect(&"127.0.0.1:12345".parse().unwrap(), &core.handle());
-                let msg = request(Op::Stats, "foo".into(), None);
-                let req = client.and_then(|client| {
-                    client.call(msg).and_then(|resp| {
-                        println!(
-                            "{}",
-                            String::from_utf8(resp.payload().unwrap().data().to_owned()).unwrap()
-                        );
-                        Ok(())
-                    })
-                });
-                core.run(req).unwrap();
-            }
-            _ => (),
-        }
+    let set = SubCommand::with_name("SET")
+        .arg(Arg::with_name("KEY").required(true).index(1))
+        .arg(Arg::with_name("VALUE").required(true).index(2));
+
+    let get = SubCommand::with_name("GET").arg(Arg::with_name("KEY").required(true).index(1));
+
+    let stats = SubCommand::with_name("STATS").about("Retrieves stats from given server");
+
+    let client = SubCommand::with_name("client")
+        .about("Run a client command on server at given address")
+        .subcommand(get)
+        .subcommand(set)
+        .subcommand(stats);
+
+    let server = SubCommand::with_name("server")
+        .about("Start a server at given address")
+        .arg(Arg::with_name("Cache Size").long("cache_size").help(
+            "Maximum number of entries in cache, default: 2,000,000",
+        ));
+
+    let matches = App::new("rcache")
+        .version("0.1")
+        .author("Davis Wahl <daviswahl@gmail.com>")
+        .about("A PoC memcached implementation")
+        .arg(
+            Arg::with_name("Socket Address")
+                .help(
+                    "Address to bind to if running server subcommand, or the address \
+                of the rcache server if running a client command",
+                )
+                .required(true)
+                .index(1),
+        )
+        .subcommand(client)
+        .subcommand(server)
+        .get_matches();
+
+    match run(matches) {
+        Ok(result) => println!("{}", result),
+        Err(err) => println!("err: {}", err),
     }
 }
 
-fn do_server() {
+fn run(matches: ArgMatches) -> Result<String, String> {
+    let addr: SocketAddr = matches
+        .value_of("Socket Address")
+        .unwrap() // Safe to unwrap because clap has validated that the addr is present
+        .parse()
+        .map_err(|_| "Failed to parse socket address.")?;
+
+    if let Some(matches) = matches.subcommand_matches("server") {
+        let cache_size: usize = matches
+            .value_of("cache_size")
+            .map(|s| s.parse().unwrap_or_else(|_| DEFAULT_CACHE_SIZE))
+            .unwrap_or_else(|| DEFAULT_CACHE_SIZE);
+
+        run_server(addr, cache_size).map(|_| "success".to_owned())
+    } else if let Some(matches) = matches.subcommand_matches("client") {
+        run_client(addr, matches)
+    } else {
+        Err("Unrecognized sub-command. ".to_owned() + matches.usage())
+    }
+}
+
+fn run_client(addr: SocketAddr, matches: &ArgMatches) -> Result<String, String> {
+    let mut core = Core::new().map_err(|e| e.description().to_owned())?;
+    let client = client::Client::connect(&addr, &core.handle());
+    let client_cmd = |client: client::Client| match matches.subcommand() {
+        ("GET", Some(matches)) => {
+            // handle GET
+            let key = matches.value_of("KEY").unwrap();
+            client.get(key.to_owned().into_bytes())
+        }
+        ("SET", Some(matches)) => {
+            // handle SET
+            let key = matches.value_of("KEY").unwrap();
+            let value = matches.value_of("VALUE").unwrap();
+            client.set(key.to_owned().into_bytes(), value.to_owned().into_bytes())
+        }
+        ("STATS", _) => client.stats(),
+        _ => unimplemented!(),
+    };
+
+
+    let exec = client.and_then(|client| client_cmd(client)).map(
+        handle_response,
+    );
+
+    // TODO: Don't want to unwrap here, should propagate error to top level
+    core.run(exec).expect("core failure")
+}
+
+fn run_server(addr: SocketAddr, cache_size: usize) -> Result<(), String> {
     service::serve(
-        "127.0.0.1:12345".parse().unwrap(),
+        addr,
         service::StatService {
             stats: Arc::new(Stats::default()),
-            inner: {
-                service::LogService {
-                    inner: service::CacheService {
-                        cache: Arc::new(cache::Cache::new(2000000).unwrap()),
-                    },
-                }
+            inner: service::CacheService {
+                cache: Arc::new(cache::Cache::new(cache_size).unwrap()),
             },
         },
-    ).unwrap();
+    ).map_err(|e| e.description().to_owned())
 }
 
-fn do_client() {
-    let mut core = Core::new().unwrap();
-
-    let client = client::Client::connect(&"127.0.0.1:12345".parse().unwrap(), &core.handle());
-
-    let mut messages = vec![];
-
-    for i in 0..500 {
-        let mut rng = rand::thread_rng();
-        let op = rng.choose(&[Op::Get, Op::Del, Op::Set]).cloned();
-
-        let mut key_buf: [u8; 4] = [0; 4];
-        rng.fill_bytes(&mut key_buf);
-
-        let mut buf: [u8; 100] = [0; 100];
-        rng.fill_bytes(&mut buf);
-        let msg = request(
-            op.unwrap(),
-            key_buf.to_vec(),
-            Some(payload(i, buf.to_owned())),
-        );
-        messages.push(msg)
-    }
-
-    core.run(client.and_then(move |client| {
-        let mut futs = vec![];
-        for msg in messages {
-            futs.push(client.call(msg));
+// Decode utf-8 strings if the message type_id is 1, otherwise just defer to builtin formatter
+fn handle_response(msg: Message) -> Result<String, String> {
+    match (msg.op(), msg.code(), msg.payload()) {
+        // Get
+        (Op::Get, Code::Hit, Some(ref payload)) => {
+            // Payload is a utf8 encoded string
+            if payload.type_id() == 1 {
+                String::from_utf8(payload.data().to_owned()).map_err(|_| {
+                    format!("expected a utf8-encoded string")
+                })
+            } else {
+                Ok(format!("{}", msg))
+            }
         }
-        futures::future::join_all(futs)
-    })).unwrap();
+        (Op::Stats, _, Some(ref payload)) => {
+            String::from_utf8(payload.data().to_owned()).map_err(|_| {
+                format!("expected a utf8-encoded string")
+            })
+        }
+        _ => Ok(format!("{}", msg)),
+    }
 }

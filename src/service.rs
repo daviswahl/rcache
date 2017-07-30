@@ -100,6 +100,7 @@ impl<T> Service for StatService<T>
     type Error = io::Error;
     type Future = Box<Future<Item = Message, Error = io::Error>>;
 
+    // TODO: Clean this up
     fn call(&self, req: Self::Request) -> Self::Future {
         match req.op() {
             Op::Stats => {
@@ -107,9 +108,12 @@ impl<T> Service for StatService<T>
                 Box::new(self.inner.call(req).map(|resp| match resp {
                     message::Message::Response(_, _, Some(payload)) => {
                         let len = payload.type_id();
-                        message::response(Op::Stats, Code::Ok, Some(message::payload(1, format!("keys: {}, {:?}", len, data).into_bytes())))
+                        let s = format!("keys: {} ", len) + data.as_ref();
+                        message::response(Op::Stats, Code::Ok, Some(
+                            message::payload(1, s.into_bytes())))
                     }
-                    _ => message::response(Op::Stats, Code::Ok, Some(message::payload(1, data.into_bytes())))
+                    _ => message::response(Op::Stats, Code::Ok,
+                                           Some(message::payload(1, data.into_bytes())))
                 }))
             }
             _ => {
@@ -117,7 +121,8 @@ impl<T> Service for StatService<T>
                 let start_time = time::now();
                 Box::new(self.inner.call(req).and_then(move|resp|{
                     stats.incr_total_requests();
-                    stats.add_request_time((time::now() - start_time).num_milliseconds() as usize);
+                    stats.add_request_time((time::now() - start_time)
+                    .num_microseconds().unwrap() as usize);
                     Ok(resp)
                 }))
             }
@@ -162,7 +167,9 @@ impl<T> Service for LogService<T>
     type Future = Box<Future<Item = Message, Error = io::Error>>;
 
     fn call(&self, req: Self::Request) -> Self::Future {
+        println!("{}", req);
         Box::new(self.inner.call(req).and_then(|resp| {
+            println!("{}", resp);
             Ok(resp)
         }))
     }
