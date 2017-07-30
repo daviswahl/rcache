@@ -9,12 +9,11 @@ use std::net::SocketAddr;
 use std::io;
 
 use proto::CacheProto;
-use service;
 use message::{self, Message, Op};
 
 /// `Client`
 pub struct Client {
-    inner: service::LogService<ClientService<TcpStream, CacheProto>>,
+    inner: ClientService<TcpStream, CacheProto>,
 }
 
 impl Client {
@@ -23,7 +22,7 @@ impl Client {
         handle: &Handle,
     ) -> impl Future<Item = Client, Error = io::Error> {
         TcpClient::new(CacheProto).connect(addr, handle).map(
-            |client_service| Client { inner: service::LogService { inner: client_service } },
+            |client_service| Client { inner: client_service },
         )
     }
 
@@ -50,6 +49,6 @@ impl Service for Client {
     type Future = Box<Future<Item = Message, Error = io::Error>>;
 
     fn call(&self, req: Message) -> Self::Future {
-        self.inner.call(req)
+        Box::new(self.inner.call(req))
     }
 }
