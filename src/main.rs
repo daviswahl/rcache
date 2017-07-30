@@ -116,16 +116,16 @@ fn run_client(addr: SocketAddr, matches: &ArgMatches) -> Result<String, String> 
 }
 
 fn run_server(addr: SocketAddr, cache_size: usize) -> Result<(), String> {
-    service::serve(
-        addr,
-        // TODO: Figure out the idiomatic way to build up these middleware
-        service::StatService {
-            stats: Arc::new(Stats::default()),
-            inner: service::CacheService {
-                cache: Arc::new(cache::Cache::new(cache_size).unwrap()),
-            },
-        },
-    ).map_err(|e| e.description().to_owned())
+    let cache = cache::Cache::new(cache_size).unwrap();
+    cache.start();
+
+    // TODO: Figure out the idiomatic way to build up these middleware
+    let service = service::StatService {
+        stats: Arc::new(Stats::default()),
+        inner: service::CacheService { cache: Arc::new(cache) },
+    };
+
+    service::serve(addr, service).map_err(|e| e.description().to_owned())
 }
 
 // Decode utf-8 strings if the message type_id is 1, otherwise just defer to builtin formatter

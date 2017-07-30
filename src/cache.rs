@@ -3,55 +3,73 @@ use tokio_core::reactor::Core;
 use std::error::Error;
 use futures::sync::oneshot::Sender;
 use futures_cpupool::CpuPool;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 use futures::future;
 use std::io;
+use std::thread;
 use error;
 use lru_cache::LruCache;
+use deque::{self, Worker, Stealer, Stolen};
 
 
-type Store = Arc<Mutex<LruCache<Vec<u8>, Payload>>>;
+type Store = LruCache<Vec<u8>, Payload>;
+type Work = (Sender<Message>, Message);
 
 /// `Cache`
 pub struct Cache {
     pool: CpuPool,
     core: Core,
-    store: Store,
+    stealer: Stealer<Work>,
+    worker: Worker<Work>,
 }
 
 impl Cache {
     pub fn new(capacity: usize) -> Result<Self, io::Error> {
+        let (worker, stealer) = deque::new();
         Ok(Cache {
             pool: CpuPool::new_num_cpus(),
             core: Core::new()?,
-            store: Arc::new(Mutex::new(LruCache::new(capacity))),
+            worker: worker,
+            stealer: stealer,
         })
+    }
+
+    pub fn start(&self) {
+        let stealer = self.stealer.clone();
+        let work = move || {
+            let mut store = LruCache::new(2000000);
+            loop {
+                match stealer.steal() {
+                    Stolen::Empty => thread::sleep_ms(1),
+                    Stolen::Abort => (),
+                    Stolen::Data(work) => {
+                        let (snd, msg) = work;
+                        let success = match handle(&mut store, msg) {
+                            Ok(msg) => snd.send(msg),
+                            Err(e) => snd.send(handle_error(&e))
+                        };
+
+                        match success {
+                           Ok(_)  => (),
+                            Err(e) => println!("Failed to send: {}", e)
+                        }
+                    },
+                };
+            };
+            future::ok(())
+        };
+
+        self.core.handle().spawn(self.pool.spawn_fn(work));
     }
 }
 
 impl Cache {
     pub fn process(&self, message: Message, snd: Sender<Message>) {
-        let store = self.store.clone();
-        let work = || {
-            let response = match handle(store, message) {
-                Ok(msg) => msg,
-                Err(err) => handle_error(&err),
-            };
-
-            match snd.send(response) {
-                Ok(_) => future::ok(()),
-                Err(e) => {
-                    println!("failed to send message: {:?}", e);
-                    future::ok(())
-                }
-            }
-        };
-
-        self.core.handle().spawn(self.pool.spawn_fn(work))
+        self.worker.push((snd, message));
     }
 }
 
-fn handle(store: Store, message: Message) -> Result<Message, error::Error> {
+fn handle(store: &mut Store, message: Message) -> Result<Message, error::Error> {
     let op = message.op();
     let (key, payload) = message.consume_request()?;
 
@@ -59,30 +77,16 @@ fn handle(store: Store, message: Message) -> Result<Message, error::Error> {
         Op::Set => {
             let key = key;
             let payload = payload.ok_or_else(|| "no payload given to set op")?;
-
-            store
-                .lock()
-                .map(|mut store| { store.insert(key, payload); })
-                .map_err(|e| {
-                    error::Error::new(error::ErrorKind::Other, e.description())
-                })?;
-
+            store.insert(key, payload);
             message::response(Op::Set, Code::Ok, None)
         }
 
         Op::Get => {
-            store
-                .lock()
-                .map(|mut store| if let Some(ref mut payload) =
-                    store.get_mut(key.as_slice())
-                {
-                    message::response(Op::Get, Code::Hit, Some(payload.clone()))
-                } else {
-                    message::response(Op::Get, Code::Miss, None)
-                })
-                .map_err(|e| {
-                    error::Error::new(error::ErrorKind::Other, e.description())
-                })?
+            if let Some(ref mut payload) = store.get_mut(key.as_slice()) {
+                message::response(Op::Get, Code::Hit, Some(payload.clone()))
+            } else {
+                message::response(Op::Get, Code::Miss, None)
+            }
         }
 
         Op::Del => {
@@ -90,18 +94,11 @@ fn handle(store: Store, message: Message) -> Result<Message, error::Error> {
             message::response(Op::Del, Code::Ok, None)
         }
         Op::Stats => {
-            store
-                .lock()
-                .map(|store| {
-                    message::response(
-                        Op::Stats,
-                        Code::Ok,
-                        Some(message::payload(store.len() as u32, vec![])),
-                    )
-                })
-                .map_err(|e| {
-                    error::Error::new(error::ErrorKind::Other, e.description())
-                })?
+            message::response(
+                Op::Stats,
+                Code::Ok,
+                Some(message::payload(store.len() as u32, vec![])),
+            )
         }
     };
 
