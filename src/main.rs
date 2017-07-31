@@ -146,7 +146,7 @@ fn handle_response(msg: &Message) -> Result<String, String> {
         }
         (Op::Stats, _, Some(payload)) => {
             String::from_utf8(payload.data().to_owned()).map_err(|_| {
-                format!("expected a utf8-encoded string")
+                "expected a utf8-encoded string".to_owned()
             })
         }
         _ => Ok(format!("{}", msg)),
