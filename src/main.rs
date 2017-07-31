@@ -119,7 +119,7 @@ fn run_client(addr: SocketAddr, matches: &ArgMatches) -> Result<String, String> 
 
 fn run_server(addr: SocketAddr, cache_size: usize) -> Result<(), String> {
     let cache = cache::Cache::new(cache_size).unwrap();
-    cache.start();
+    cache.start(cache_size);
 
     // TODO: Figure out the idiomatic way to build up these middleware
     let service = service::StatService {
@@ -169,7 +169,11 @@ mod tests {
                 rng.fill_bytes(&mut key);
                 let mut value = [0; 150];
                 rng.fill_bytes(&mut value);
-                message::request(Op::Set, key.to_vec(), Some(message::payload(2, value.to_vec())))
+                message::request(
+                    Op::Set,
+                    key.to_vec(),
+                    Some(message::payload(2, value.to_vec())),
+                )
             })
             .collect()
     }
@@ -191,7 +195,7 @@ mod tests {
         let mut core = Core::new().unwrap();
         let addr: SocketAddr = "127.0.0.1:12345".parse().unwrap();
 
-        thread::spawn(move || run_server(addr.clone(), 1000));
+        thread::spawn(move || run_server(addr.clone(), 200000));
         thread::sleep_ms(100);
 
         // fill cache

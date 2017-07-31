@@ -39,9 +39,9 @@ impl Cache {
 
     pub fn start(&self, capacity: usize) {
         let stealer = self.stealer.clone();
-        let work = move || {
-            let mut store = LruCache::new(capacity);
-            loop {
+        let work = future::loop_fn(
+            (stealer.clone(), LruCache::new(capacity)),
+            |(stealer, mut store): (Stealer<Work>, Store)| {
                 match stealer.steal() {
                     Stolen::Empty => (),
                     Stolen::Abort => (),
@@ -49,20 +49,19 @@ impl Cache {
                         let (snd, msg) = work;
                         let success = match handle(&mut store, msg) {
                             Ok(msg) => snd.send(msg),
-                            Err(e) => snd.send(handle_error(&e))
+                            Err(e) => snd.send(handle_error(&e)),
                         };
-
                         match success {
-                           Ok(_)  => (),
-                            Err(e) => println!("Failed to send: {}", e)
+                            Ok(_) => (),
+                            Err(e) => println!("Failed to send: {}.", e),
                         }
-                    },
+                    }
                 };
-            };
-            future::ok(())
-        };
+                future::ok(future::Loop::Continue((stealer, store)))
+            },
+        );
 
-        self.core.handle().spawn(self.pool.spawn_fn(work));
+        self.core.handle().spawn(self.pool.spawn(work));
     }
 }
 
