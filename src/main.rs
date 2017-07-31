@@ -195,7 +195,7 @@ mod tests {
         thread::sleep_ms(100);
 
         // fill cache
-        let sets = build_sets(1000);
+        let sets = build_sets(200000);
         let handle = core.handle();
         core.run(client::Client::connect(&addr, &handle).and_then(
             move |client| {
@@ -204,7 +204,7 @@ mod tests {
             },
         ));
 
-        let ops = [&build_gets(500)[..], &build_sets(500)[..]].concat();
+        let ops = [&build_gets(25000)[..], &build_sets(25000)[..]].concat();
         b.iter(|| {
             let client = client::Client::connect(&addr, &core.handle());
             let requests = client.and_then(|client| {

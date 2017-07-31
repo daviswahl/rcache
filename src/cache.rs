@@ -26,21 +26,24 @@ pub struct Cache {
 impl Cache {
     pub fn new(capacity: usize) -> Result<Self, io::Error> {
         let (worker, stealer) = deque::new();
-        Ok(Cache {
+        let cache = Cache {
             pool: CpuPool::new_num_cpus(),
             core: Core::new()?,
             worker: worker,
             stealer: stealer,
-        })
+        };
+
+        cache.start(capacity);
+        Ok(cache)
     }
 
-    pub fn start(&self) {
+    pub fn start(&self, capacity: usize) {
         let stealer = self.stealer.clone();
         let work = move || {
-            let mut store = LruCache::new(2000000);
+            let mut store = LruCache::new(capacity);
             loop {
                 match stealer.steal() {
-                    Stolen::Empty => thread::sleep_ms(1),
+                    Stolen::Empty => (),
                     Stolen::Abort => (),
                     Stolen::Data(work) => {
                         let (snd, msg) = work;
