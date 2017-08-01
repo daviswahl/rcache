@@ -11,9 +11,12 @@ use deque::{self, Worker, Stealer, Stolen};
 
 
 type Store = LruCache<Vec<u8>, Payload>;
+
 type Work = (Sender<Message>, Message);
 
-/// `Cache`
+/// A thread safe wrapper around `LruCache` that synchronizes reads/writes via a single
+/// threaded worker that reads requests from a dequeue and pushes responses into a channel
+/// provided by the request (`Work`) payload.
 pub struct Cache {
     pool: CpuPool,
     core: Core,
@@ -71,7 +74,8 @@ impl Cache {
         self.core.handle().spawn(self.pool.spawn(work));
     }
 
-    /// Push work onto the queue.
+    /// Push work onto the queue. `snd` is a `futures::sync::oneshot::Sender<Message>`. When the
+    /// worker has completed the request, it will send its `Message::Response` via the sender.
     pub fn process(&self, message: Message, snd: Sender<Message>) {
         self.worker.push((snd, message));
     }

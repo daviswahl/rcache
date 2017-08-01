@@ -22,8 +22,6 @@ static HEADER_LEN: usize = 8 + 1 + 1 + 8 + 4;
 /// |   [u8]   |   u32       |    [u8]     |
 /// |          |             |             |
 /// +----------+-------------+-------------+
-
-/// `CacheCodec`
 pub struct CacheCodec;
 
 impl Encoder for CacheCodec {

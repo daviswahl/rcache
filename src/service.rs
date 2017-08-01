@@ -54,6 +54,7 @@ where
 }
 
 /// `CacheService`
+/// A service wrapper for `cache::Cache`.
 pub struct CacheService {
     pub cache: Arc<cache::Cache>,
 }
