@@ -22,6 +22,7 @@ pub struct Cache {
 }
 
 impl Cache {
+    /// Initialize a new `Cache` with `capacity` and start the worker thread.
     pub fn new(capacity: usize) -> Result<Self, io::Error> {
         let (worker, stealer) = deque::new();
         let cache = Cache {
@@ -35,14 +36,23 @@ impl Cache {
         Ok(cache)
     }
 
+    /// Start the stealer thread, which has unsynchronized access to the underlying store.
+    /// `Work` is pushed to the worker via the deque. `Work` is a (Sender<Message>, Message) pair
+    /// where `Message` is a request to do work on the store and `Sender` is a channel to send the result.
+    ///
+    /// TODO: using `loop_fn` doesn't do what I thought, and this thread currently pegs the CPU just waiting for work.
+    /// I think I need to make the work queue a pollable stream so that we can wait for new work without pegging the CPU.
     pub fn start(&self, capacity: usize) {
         let stealer = self.stealer.clone();
+        /// Loop infinitely, attempting to steal work from the deque.
+        /// When work is obtained, it's dispatched to the `handle` method, which returns a Result containing
+        /// the `Message::Response` variant. The response will be returned via the `Sender`
         let work = future::loop_fn(
-            (stealer.clone(), LruCache::new(capacity)),
+            (stealer, LruCache::new(capacity)),
             |(stealer, mut store): (Stealer<Work>, Store)| {
                 match stealer.steal() {
-                    Stolen::Empty => (),
-                    Stolen::Abort => (),
+                    Stolen::Empty => (), // Continue
+                    Stolen::Abort => (), // TODO: Handle aborts, the obvious manner of doing this doesn't seem to be working
                     Stolen::Data(work) => {
                         let (snd, msg) = work;
                         let success = match handle(&mut store, msg) {
@@ -58,17 +68,17 @@ impl Cache {
                 future::ok(future::Loop::Continue((stealer, store)))
             },
         );
-
         self.core.handle().spawn(self.pool.spawn(work));
     }
-}
 
-impl Cache {
+    /// Push work onto the queue.
     pub fn process(&self, message: Message, snd: Sender<Message>) {
         self.worker.push((snd, message));
     }
 }
 
+/// Handle the request. `Message` is a Message::Request variant from the front end.
+/// The response message should be a Message::Response variant.
 fn handle(store: &mut Store, message: Message) -> Result<Message, error::Error> {
     let op = message.op();
     let (key, payload) = message.consume_request()?;
@@ -89,8 +99,8 @@ fn handle(store: &mut Store, message: Message) -> Result<Message, error::Error> 
             }
         }
 
+        // TODO
         Op::Del => {
-            // Probably never going to do this
             message::response(Op::Del, Code::Ok, None)
         }
         Op::Stats => {
@@ -105,6 +115,12 @@ fn handle(store: &mut Store, message: Message) -> Result<Message, error::Error> 
     Ok(response)
 }
 
+/// Creates a Message::Response, setting the error code and
+/// and passing the error description as the payload. Responses with an error code should
+/// enforce the invariant that the payload contain a UTF8-encoded string, so that clients
+/// can safely decode the payload for human consumption.
+///
+/// TODO: match over the error kind and translate it into an appropriate error for the front end.
 fn handle_error(err: &error::Error) -> Message {
     message::response(
         Op::Get,

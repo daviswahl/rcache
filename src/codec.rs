@@ -7,6 +7,10 @@ use message::{self, Message, Op, Code};
 
 
 static HEADER_LEN: usize = 8 + 1 + 1 + 8 + 4;
+/// A basic, multiplexed byte-protocol for interacting with the cache.
+/// This is my first ever binary/byte protocol and no doubt has numerous issues. At the very
+/// least, there should be a CRC check and support for CAS ops.
+///
 /// +-- request id ------+- code ---------+----op --+--- payload len ---+---- key len ---
 /// |                    |                |         |                   |
 /// | u64 (8 bytes)      | u8, 0 = req    |   u8    |  u64 (8 bytes)    |  u32 (4 bytes)
