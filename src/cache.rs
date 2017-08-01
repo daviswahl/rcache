@@ -77,8 +77,8 @@ impl Cache {
     }
 }
 
-/// Handle the request. `Message` is a Message::Request variant from the front end.
-/// The response message should be a Message::Response variant.
+/// Handle the request. `Message` is a `Message::Request` variant from the front end.
+/// The response message should be a `Message::Response` variant.
 fn handle(store: &mut Store, message: Message) -> Result<Message, error::Error> {
     let op = message.op();
     let (key, payload) = message.consume_request()?;
@@ -115,7 +115,7 @@ fn handle(store: &mut Store, message: Message) -> Result<Message, error::Error> 
     Ok(response)
 }
 
-/// Creates a Message::Response, setting the error code and
+/// Creates a `Message::Response`, setting the error code and
 /// and passing the error description as the payload. Responses with an error code should
 /// enforce the invariant that the payload contain a UTF8-encoded string, so that clients
 /// can safely decode the payload for human consumption.

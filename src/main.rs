@@ -1,7 +1,6 @@
 #![feature(test)]
 extern crate test;
 extern crate rcache;
-extern crate tokio_service;
 extern crate tokio_core;
 extern crate futures;
 extern crate futures_cpupool;
@@ -14,7 +13,6 @@ use rcache::service;
 use rcache::cache;
 use std::error::Error;
 use std::net::SocketAddr;
-use tokio_service::Service;
 use rcache::message::{Message, Op, Code};
 use futures::Future;
 use std::sync::Arc;

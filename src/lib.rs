@@ -36,9 +36,7 @@
 /// benchmarking methodology. Even so, it's neat that a weekend implementation project can get into
 /// the same ballpark as memcached.
 
-extern crate capnp;
 extern crate time;
-extern crate capnp_futures;
 extern crate futures;
 extern crate futures_cpupool;
 extern crate mio_uds;
@@ -52,11 +50,12 @@ extern crate rand;
 extern crate lru_cache;
 extern crate test;
 
-pub mod codec;
 pub mod client;
-pub mod service;
 pub mod message;
-pub mod proto;
 pub mod cache;
 pub mod stats;
-pub mod error;
+pub mod service;
+
+mod codec;
+mod proto;
+mod error;
