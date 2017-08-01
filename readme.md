@@ -1,1 +1,1 @@
-See documentation on docs.rs: https://docs.rs/rcache/0.1.0/rcache/
+See documentation on docs.rs: https://docs.rs/rcache
