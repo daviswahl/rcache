@@ -1,6 +1,6 @@
 [package]
 name = "rcache"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Davis Wahl <dwahl@signalpath.com>"]
 description = "A basic, featureless memory cache with a TCP frontend analogous to memcached."
 license = "MIT"

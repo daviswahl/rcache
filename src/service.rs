@@ -19,7 +19,7 @@ use futures::sync::oneshot;
 use stats::Stats;
 use time;
 
-/// `serve`
+/// Takes a `NewService<Request=Message, Response=Message>` and servces it at `addr`.
 pub fn serve<T>(addr: SocketAddr, s: T) -> io::Result<()>
 where
     T: NewService<Request = Message, Response = Message, Error = io::Error> + 'static,
@@ -53,8 +53,7 @@ where
     core.run(server)
 }
 
-/// `CacheService`
-/// A service wrapper for `cache::Cache`.
+/// A service middleware that dispatches requests to `cache::Cache`.
 pub struct CacheService {
     pub cache: Arc<cache::Cache>,
 }
@@ -87,7 +86,8 @@ impl NewService for CacheService {
     }
 }
 
-/// `StatService`
+/// A simplistic stat collecting middleware that counts total number of requests and tracks
+/// average request time.
 pub struct StatService<T> {
     pub inner: T,
     pub stats: Arc<Stats>,
@@ -154,7 +154,7 @@ where
     }
 }
 
-/// `LogService`
+/// A printf logger middleware.
 pub struct LogService<T> {
     pub inner: T,
 }
