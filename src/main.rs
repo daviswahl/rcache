@@ -4,6 +4,7 @@ extern crate rcache;
 extern crate tokio_core;
 extern crate futures;
 extern crate futures_cpupool;
+extern crate tokio_service;
 extern crate rand;
 extern crate time;
 extern crate clap;
@@ -24,7 +25,6 @@ use clap::{Arg, App, SubCommand, ArgMatches};
 static DEFAULT_CACHE_SIZE: usize = 2000000;
 
 fn main() {
-
     let set = SubCommand::with_name("SET")
         .arg(Arg::with_name("KEY").required(true).index(1))
         .arg(Arg::with_name("VALUE").required(true).index(2));
@@ -52,7 +52,7 @@ fn main() {
         .arg(
             Arg::with_name("Socket Address")
                 .help(
-                    "Address to bind to if running server subcommand, or the address \
+                    "Address to bind to if running server subcommand, or theaddress \
                 of the rcache server if running a client command",
                 )
                 .required(true)
@@ -69,9 +69,10 @@ fn main() {
 }
 
 fn run(matches: &ArgMatches) -> Result<String, String> {
+    // Unwraps in here are safe because clap has already validated that required params are present
     let addr: SocketAddr = matches
         .value_of("Socket Address")
-        .unwrap() // Safe to unwrap because clap has validated that the addr is present
+        .unwrap()
         .parse()
         .map_err(|_| "Failed to parse socket address.")?;
 
@@ -92,6 +93,7 @@ fn run_client(addr: SocketAddr, matches: &ArgMatches) -> Result<String, String> 
     let mut core = Core::new().map_err(|e| e.description().to_owned())?;
     let client = client::Client::connect(&addr, &core.handle());
 
+    // Unwraps in here are safe because clap has already validated that required params are present
     let client_cmd = |client: client::Client| match matches.subcommand() {
         ("GET", Some(matches)) => {
             // handle GET
@@ -157,7 +159,8 @@ mod tests {
     use test::Bencher;
     use std::thread;
     use rand::Rng;
-    use rcache::message::{self, Op, Payload, Code};
+    use rcache::message::{self, Op};
+    use tokio_service::Service;
 
     fn build_sets(count: usize) -> Vec<Message> {
         let mut rng = rand::thread_rng();
@@ -188,13 +191,15 @@ mod tests {
             .collect()
     }
 
+    /// TODO: Better benchmarking.
     #[bench]
     fn bench_gets_full_cache(b: &mut Bencher) {
         let mut core = Core::new().unwrap();
         let addr: SocketAddr = "127.0.0.1:12345".parse().unwrap();
 
         thread::spawn(move || run_server(addr.clone(), 200000));
-        thread::sleep_ms(100);
+        let duration = std::time::Duration::new(0, 1000);
+        thread::sleep(duration);
 
         // fill cache
         let sets = build_sets(200000);
@@ -204,7 +209,7 @@ mod tests {
                 let futs = sets.into_iter().map(move |msg| client.call(msg.clone()));
                 futures::future::join_all(futs)
             },
-        ));
+        )).unwrap();
 
         let ops = [&build_gets(25000)[..], &build_sets(25000)[..]].concat();
         b.iter(|| {
@@ -213,7 +218,7 @@ mod tests {
                 let futs = ops.iter().map(move |msg| client.call(msg.clone()));
                 futures::future::join_all(futs)
             });
-            core.run(requests);
+            core.run(requests).unwrap();
 
             let stats =
                 client::Client::connect(&addr, &core.handle()).and_then(|client| client.stats());
