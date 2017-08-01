@@ -11,7 +11,8 @@ use std::io;
 use proto::CacheProto;
 use message::{self, Message, Op};
 
-/// `Client`
+/// A simple client for interacting with `rcache`, intended for debugging, testing, and benchmarking.
+/// Can be used as a template for implementing a more robust client.
 pub struct Client {
     inner: ClientService<TcpStream, CacheProto>,
 }
