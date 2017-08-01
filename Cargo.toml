@@ -8,7 +8,8 @@ path = "src/lib.rs"
 
 [[bin]]
 name = "rcache"
-path = "src/main.rs"
+path = "src/bin/rcache.rs"
+doc = false
 
 [dependencies]
 bytes = "0.4"

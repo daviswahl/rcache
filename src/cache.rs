@@ -44,9 +44,9 @@ impl Cache {
     /// I think I need to make the work queue a pollable stream so that we can wait for new work without pegging the CPU.
     pub fn start(&self, capacity: usize) {
         let stealer = self.stealer.clone();
-        /// Loop infinitely, attempting to steal work from the deque.
-        /// When work is obtained, it's dispatched to the `handle` method, which returns a Result containing
-        /// the `Message::Response` variant. The response will be returned via the `Sender`
+        // Loop infinitely, attempting to steal work from the deque.
+        // When work is obtained, it's dispatched to the `handle` method, which returns a Result containing
+        // the `Message::Response` variant. The response will be returned via the `Sender`
         let work = future::loop_fn(
             (stealer, LruCache::new(capacity)),
             |(stealer, mut store): (Stealer<Work>, Store)| {
