@@ -2,9 +2,6 @@
 #![feature(try_from)]
 #![feature(plugin)]
 #![feature(test)]
-#![plugin(clippy)]
-
-#![allow(match_same_arms)]
 //! # rcache
 //!
 //! `rcache` is a basic, featureless memory cache with a TCP frontend analogous to memcached.
