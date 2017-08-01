@@ -3,6 +3,7 @@ name = "rcache"
 version = "0.1.1"
 authors = ["Davis Wahl <dwahl@signalpath.com>"]
 description = "A basic, featureless memory cache with a TCP frontend analogous to memcached."
+repository = "https://github.com/daviswahl/rcache"
 license = "MIT"
 
 [lib]
