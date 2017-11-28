@@ -3,6 +3,7 @@
 #![feature(plugin)]
 #![feature(test)]
 //! # rcache
+//! NOTE: If you have a good use for the name `rcache` and want ownership, contat me via github.
 //!
 //! `rcache` is a basic, featureless memory cache with a TCP frontend analogous to memcached.
 //! It is not production ready, and it's unlikely that it ever will be. Nevertheless,
