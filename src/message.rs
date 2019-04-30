@@ -185,7 +185,7 @@ impl fmt::Display for Code {
 impl TryFrom<u8> for Code {
     type Error = error::Error;
 
-    fn try_from(i: u8) -> Result<Self, Self::Error> {
+    fn try_from(i: u8) -> Result<Self, error::Error> {
         match i {
             0 => Ok(Code::Req),
             1 => Ok(Code::Ok),
